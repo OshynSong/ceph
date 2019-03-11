@@ -2,7 +2,7 @@
 // vim: ts=8 sw=2 smarttab
 
 #include "tools/rbd/Utils.h"
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 #include "include/Context.h"
 #include "include/encoding.h"
 #include "common/common_init.h"
@@ -84,7 +84,7 @@ int read_string(int fd, unsigned max, std::string *out) {
 int extract_spec(const std::string &spec, std::string *pool_name,
                  std::string *namespace_name, std::string *name,
                  std::string *snap_name, SpecValidation spec_validation) {
-  if (!g_ceph_context->_conf->get_val<bool>("rbd_validate_names")) {
+  if (!g_ceph_context->_conf.get_val<bool>("rbd_validate_names")) {
     spec_validation = SPEC_VALIDATION_NONE;
   }
 
@@ -165,39 +165,53 @@ std::string get_positional_argument(const po::variables_map &vm, size_t index) {
 }
 
 std::string get_default_pool_name() {
-  return g_ceph_context->_conf->get_val<std::string>("rbd_default_pool");
+  return g_ceph_context->_conf.get_val<std::string>("rbd_default_pool");
 }
 
-std::string get_pool_name(const po::variables_map &vm, size_t *arg_index) {
-  std::string pool_name;
+int get_pool_and_namespace_names(
+    const boost::program_options::variables_map &vm,
+    bool default_empty_pool_name, bool validate_pool_name,
+    std::string* pool_name, std::string* namespace_name, size_t *arg_index) {
+  if (namespace_name != nullptr && vm.count(at::NAMESPACE_NAME)) {
+    *namespace_name = vm[at::NAMESPACE_NAME].as<std::string>();
+  }
+
   if (vm.count(at::POOL_NAME)) {
-    pool_name = vm[at::POOL_NAME].as<std::string>();
+    *pool_name = vm[at::POOL_NAME].as<std::string>();
   } else {
-    pool_name = get_positional_argument(vm, *arg_index);
-    if (!pool_name.empty()) {
-       ++(*arg_index);
+    *pool_name = get_positional_argument(vm, *arg_index);
+    if (!pool_name->empty()) {
+      if (namespace_name != nullptr) {
+        auto slash_pos = pool_name->find_last_of('/');
+        if (slash_pos != std::string::npos) {
+          *namespace_name = pool_name->substr(slash_pos + 1);
+        }
+        *pool_name = pool_name->substr(0, slash_pos);
+      }
+      ++(*arg_index);
     }
   }
 
-  if (pool_name.empty()) {
-    pool_name = get_default_pool_name();
-  }
-  return pool_name;
-}
-
-std::string get_namespace_name(const boost::program_options::variables_map &vm,
-                               size_t *arg_index) {
-  std::string namespace_name;
-  if (vm.count(at::NAMESPACE_NAME)) {
-    namespace_name = vm[at::NAMESPACE_NAME].as<std::string>();
-  } else if (arg_index != nullptr) {
-    namespace_name = get_positional_argument(vm, *arg_index);
-    if (!namespace_name.empty()) {
-       ++(*arg_index);
-    }
+  if (default_empty_pool_name && pool_name->empty()) {
+    *pool_name = get_default_pool_name();
   }
 
-  return namespace_name;
+  if (!g_ceph_context->_conf.get_val<bool>("rbd_validate_names")) {
+    validate_pool_name = false;
+  }
+
+  if (validate_pool_name &&
+      pool_name->find_first_of("/@") != std::string::npos) {
+    std::cerr << "rbd: invalid pool '" << *pool_name << "'" << std::endl;
+    return -EINVAL;
+  } else if (namespace_name != nullptr &&
+             namespace_name->find_first_of("/@") != std::string::npos) {
+    std::cerr << "rbd: invalid namespace '" << *namespace_name << "'"
+              << std::endl;
+    return -EINVAL;
+  }
+
+  return 0;
 }
 
 int get_pool_image_id(const po::variables_map &vm,
@@ -494,8 +508,8 @@ int get_image_options(const boost::program_options::variables_map &vm,
     }
 
     if (format_specified) {
-      int r = g_conf->set_val("rbd_default_format", stringify(format));
-      assert(r == 0);
+      int r = g_conf().set_val("rbd_default_format", stringify(format));
+      ceph_assert(r == 0);
       opts->set(RBD_IMAGE_OPTION_FORMAT, format);
     }
   }
@@ -538,25 +552,25 @@ int get_journal_options(const boost::program_options::variables_map &vm,
     }
     opts->set(RBD_IMAGE_OPTION_JOURNAL_ORDER, order);
 
-    int r = g_conf->set_val("rbd_journal_order", stringify(order));
-    assert(r == 0);
+    int r = g_conf().set_val("rbd_journal_order", stringify(order));
+    ceph_assert(r == 0);
   }
   if (vm.count(at::JOURNAL_SPLAY_WIDTH)) {
     opts->set(RBD_IMAGE_OPTION_JOURNAL_SPLAY_WIDTH,
 	      vm[at::JOURNAL_SPLAY_WIDTH].as<uint64_t>());
 
-    int r = g_conf->set_val("rbd_journal_splay_width",
+    int r = g_conf().set_val("rbd_journal_splay_width",
 			    stringify(
 			      vm[at::JOURNAL_SPLAY_WIDTH].as<uint64_t>()));
-    assert(r == 0);
+    ceph_assert(r == 0);
   }
   if (vm.count(at::JOURNAL_POOL)) {
     opts->set(RBD_IMAGE_OPTION_JOURNAL_POOL,
 	      vm[at::JOURNAL_POOL].as<std::string>());
 
-    int r = g_conf->set_val("rbd_journal_pool",
+    int r = g_conf().set_val("rbd_journal_pool",
 			    vm[at::JOURNAL_POOL].as<std::string>());
-    assert(r == 0);
+    ceph_assert(r == 0);
   }
 
   return 0;
@@ -621,13 +635,12 @@ int get_formatter(const po::variables_map &vm,
 }
 
 void init_context() {
-  g_conf->set_val_or_die("rbd_cache_writethrough_until_flush", "false");
-  g_conf->apply_changes(NULL);
+  g_conf().set_val_or_die("rbd_cache_writethrough_until_flush", "false");
+  g_conf().apply_changes(nullptr);
   common_init_finish(g_ceph_context);
 }
 
-int init(const std::string &pool_name, const std::string& namespace_name,
-         librados::Rados *rados, librados::IoCtx *io_ctx) {
+int init_rados(librados::Rados *rados) {
   init_context();
 
   int r = rados->init_with_context(g_ceph_context);
@@ -639,6 +652,18 @@ int init(const std::string &pool_name, const std::string& namespace_name,
   r = rados->connect();
   if (r < 0) {
     std::cerr << "rbd: couldn't connect to the cluster!" << std::endl;
+    return r;
+  }
+
+  return 0;
+}
+
+int init(const std::string &pool_name, const std::string& namespace_name,
+         librados::Rados *rados, librados::IoCtx *io_ctx) {
+  init_context();
+
+  int r = init_rados(rados);
+  if (r < 0) {
     return r;
   }
 
@@ -665,12 +690,31 @@ int init_io_ctx(librados::Rados &rados, const std::string &pool_name,
     return r;
   }
 
+  return set_namespace(namespace_name, io_ctx);
+}
+
+int set_namespace(const std::string& namespace_name, librados::IoCtx *io_ctx) {
+  if (!namespace_name.empty()) {
+    librbd::RBD rbd;
+    bool exists = false;
+    int r = rbd.namespace_exists(*io_ctx, namespace_name.c_str(), &exists);
+    if (r < 0) {
+      std::cerr << "rbd: error asserting namespace: "
+                << cpp_strerror(r) << std::endl;
+      return r;
+    }
+    if (!exists) {
+      std::cerr << "rbd: namespace '" << namespace_name << "' does not exist."
+                << std::endl;
+      return -ENOENT;
+    }
+  }
   io_ctx->set_namespace(namespace_name);
   return 0;
 }
 
 void disable_cache() {
-  g_conf->set_val_or_die("rbd_cache", "false");
+  g_conf().set_val_or_die("rbd_cache", "false");
 }
 
 int open_image(librados::IoCtx &io_ctx, const std::string &image_name,
@@ -757,7 +801,7 @@ void calc_sparse_extent(const bufferptr &bp,
                         bool *zeroed) {
   if (sparse_size == 0) {
     // sparse writes are disabled -- write the full extent
-    assert(buffer_offset == 0);
+    ceph_assert(buffer_offset == 0);
     *write_length = buffer_length;
     *zeroed = false;
     return;
@@ -775,7 +819,7 @@ void calc_sparse_extent(const bufferptr &bp,
     if (original_offset == buffer_offset) {
       *zeroed = extent_is_zero;
     } else if (*zeroed != extent_is_zero) {
-      assert(*write_length > 0);
+      ceph_assert(*write_length > 0);
       return;
     }
 
@@ -844,7 +888,7 @@ std::string timestr(time_t t) {
 }
 
 uint64_t get_rbd_default_features(CephContext* cct) {
-  auto features = cct->_conf->get_val<std::string>("rbd_default_features");
+  auto features = cct->_conf.get_val<std::string>("rbd_default_features");
   return boost::lexical_cast<uint64_t>(features);
 }
 

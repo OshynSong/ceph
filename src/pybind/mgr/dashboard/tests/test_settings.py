@@ -3,10 +3,11 @@ from __future__ import absolute_import
 
 import errno
 import unittest
-
 from .. import mgr
 from .. import settings
+from ..controllers.settings import Settings as SettingsController
 from ..settings import Settings, handle_option_command
+from .helper import ControllerTestCase
 
 
 class SettingsTest(unittest.TestCase):
@@ -21,17 +22,17 @@ class SettingsTest(unittest.TestCase):
         settings._OPTIONS_COMMAND_MAP = settings._options_command_map()
 
     @classmethod
-    def mock_set_config(cls, attr, val):
+    def mock_set_module_option(cls, attr, val):
         cls.CONFIG_KEY_DICT[attr] = val
 
     @classmethod
-    def mock_get_config(cls, attr, default):
+    def mock_get_module_option(cls, attr, default):
         return cls.CONFIG_KEY_DICT.get(attr, default)
 
     def setUp(self):
         self.CONFIG_KEY_DICT.clear()
-        mgr.set_config.side_effect = self.mock_set_config
-        mgr.get_config.side_effect = self.mock_get_config
+        mgr.set_module_option.side_effect = self.mock_set_module_option
+        mgr.get_module_option.side_effect = self.mock_get_module_option
         if Settings.GRAFANA_API_HOST != 'localhost':
             Settings.GRAFANA_API_HOST = 'localhost'
         if Settings.GRAFANA_API_PORT != 3000:
@@ -105,3 +106,79 @@ class SettingsTest(unittest.TestCase):
 
         self.assertEqual(str(ctx.exception),
                          "type object 'Options' has no attribute 'NON_EXISTENT_OPTION'")
+
+
+class SettingsControllerTest(ControllerTestCase):
+    config_values = {}
+
+    @classmethod
+    def setup_server(cls):
+        # pylint: disable=protected-access
+
+        SettingsController._cp_config['tools.authenticate.on'] = False
+        cls.setup_controllers([SettingsController])
+
+    @classmethod
+    def mock_set_module_option(cls, attr, val):
+        cls.config_values[attr] = val
+
+    @classmethod
+    def mock_get_module_option(cls, attr, default):
+        return cls.config_values.get(attr, default)
+
+    def setUp(self):
+        self.config_values.clear()
+        mgr.set_module_option.side_effect = self.mock_set_module_option
+        mgr.get_module_option.side_effect = self.mock_get_module_option
+
+    def test_settings_list(self):
+        self._get('/api/settings')
+        data = self.jsonBody()
+        self.assertTrue(len(data) > 0)
+        self.assertStatus(200)
+        self.assertIn('default', data[0].keys())
+        self.assertIn('type', data[0].keys())
+        self.assertIn('name', data[0].keys())
+        self.assertIn('value', data[0].keys())
+
+    def test_rgw_daemon_get(self):
+        self._get('/api/settings/grafana-api-username')
+        self.assertStatus(200)
+        self.assertJsonBody({
+            u'default': u'admin',
+            u'type': u'str',
+            u'name': u'GRAFANA_API_USERNAME',
+            u'value': u'admin',
+        })
+
+    def test_set(self):
+        self._put('/api/settings/GRAFANA_API_USERNAME', {'value': 'foo'},)
+        self.assertStatus(200)
+
+        self._get('/api/settings/GRAFANA_API_USERNAME')
+        self.assertStatus(200)
+        self.assertInJsonBody('default')
+        self.assertInJsonBody('type')
+        self.assertInJsonBody('name')
+        self.assertInJsonBody('value')
+        self.assertEqual(self.jsonBody()['value'], 'foo')
+
+    def test_bulk_set(self):
+        self._put('/api/settings', {
+            'GRAFANA_API_USERNAME': 'foo',
+            'GRAFANA_API_HOST': 'somehost',
+        })
+        self.assertStatus(200)
+
+        self._get('/api/settings/grafana-api-username')
+        self.assertStatus(200)
+        body = self.jsonBody()
+        self.assertEqual(body['value'], 'foo')
+
+        self._get('/api/settings/grafana-api-username')
+        self.assertStatus(200)
+        self.assertEqual(self.jsonBody()['value'], 'foo')
+
+        self._get('/api/settings/grafana-api-host')
+        self.assertStatus(200)
+        self.assertEqual(self.jsonBody()['value'], 'somehost')

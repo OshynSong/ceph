@@ -5,10 +5,9 @@
 #define CEPH_LIBRBD_API_GROUP_H
 
 #include "include/rbd/librbd.hpp"
+#include "include/rados/librados_fwd.hpp"
 #include <string>
 #include <vector>
-
-namespace librados { struct IoCtx; }
 
 namespace librbd {
 
@@ -46,6 +45,9 @@ struct Group {
                          const char *old_snap_name, const char *new_snap_name);
   static int snap_list(librados::IoCtx& group_ioctx, const char *group_name,
                        std::vector<group_snap_info_t> *snaps);
+  static int snap_rollback(librados::IoCtx& group_ioctx,
+                           const char *group_name, const char *snap_name,
+                           ProgressContext& pctx);
 
 };
 

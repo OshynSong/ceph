@@ -17,23 +17,22 @@
  
 #include <stdlib.h>
 #include <ostream>
+#include <string_view>
 
-#include <boost/intrusive_ptr.hpp>
 #include <boost/intrusive/list.hpp>
-// Because intrusive_ptr clobbers our assert...
-#include "include/assert.h"
 
-#include "include/types.h"
-#include "include/buffer.h"
-#include "common/ThrottleInterface.h"
-#include "common/zipkin_trace.h"
-#include "msg_types.h"
-
+#include "include/Context.h"
 #include "common/RefCountedObj.h"
-#include "msg/Connection.h"
-
-#include "common/debug.h"
+#include "common/ThrottleInterface.h"
 #include "common/config.h"
+#include "common/debug.h"
+#include "common/zipkin_trace.h"
+#include "include/ceph_assert.h" // Because intrusive_ptr clobbers our assert...
+#include "include/buffer.h"
+#include "include/types.h"
+#include "msg/Connection.h"
+#include "msg/MessageRef.h"
+#include "msg_types.h"
 
 // monitor internal
 #define MSG_MON_SCRUB              64
@@ -128,6 +127,7 @@
 #define MSG_OSD_PG_CREATE2      120
 #define MSG_OSD_SCRUB2          121
 
+#define MSG_OSD_PG_READY_TO_MERGE 122
 
 // *** MDS ***
 
@@ -154,6 +154,7 @@
 #define MSG_MDS_OPENINO            0x20f
 #define MSG_MDS_OPENINOREPLY       0x210
 #define MSG_MDS_SNAPUPDATE         0x211
+#define MSG_MDS_FRAGMENTNOTIFYACK  0x212
 #define MSG_MDS_LOCK               0x300
 #define MSG_MDS_INODEFILECAPS      0x301
 
@@ -259,6 +260,9 @@ protected:
   bi::list_member_hook<> dispatch_q;
 
 public:
+  using ref = MessageRef;
+  using const_ref = MessageConstRef;
+
   // zipkin tracing
   ZTracer::Trace trace;
   void encode_trace(bufferlist &bl, uint64_t features) const;
@@ -384,6 +388,7 @@ public:
 
   bool empty_payload() const { return payload.length() == 0; }
   bufferlist& get_payload() { return payload; }
+  const bufferlist& get_payload() const { return payload; }
   void set_payload(bufferlist& bl) {
     if (byte_throttler)
       byte_throttler->put(payload.length());
@@ -492,7 +497,7 @@ public:
   // virtual bits
   virtual void decode_payload() = 0;
   virtual void encode_payload(uint64_t features) = 0;
-  virtual const char *get_type_name() const = 0;
+  virtual std::string_view get_type_name() const = 0;
   virtual void print(ostream& out) const {
     out << get_type_name() << " magic: " << magic;
   }
@@ -501,7 +506,6 @@ public:
 
   void encode(uint64_t features, int crcflags);
 };
-typedef boost::intrusive_ptr<Message> MessageRef;
 
 extern Message *decode_message(CephContext *cct, int crcflags,
 			       ceph_msg_header &header,
@@ -518,5 +522,56 @@ inline ostream& operator<<(ostream& out, const Message& m) {
 extern void encode_message(Message *m, uint64_t features, bufferlist& bl);
 extern Message *decode_message(CephContext *cct, int crcflags,
                                bufferlist::const_iterator& bl);
+
+template <class MessageType>
+class MessageFactory {
+public:
+template<typename... Args>
+  static typename MessageType::ref build(Args&&... args) {
+    return typename MessageType::ref(new MessageType(std::forward<Args>(args)...), false);
+  }
+};
+
+template<class T, class M = Message>
+class MessageSubType : public M {
+public:
+  typedef boost::intrusive_ptr<T> ref;
+  typedef boost::intrusive_ptr<T const> const_ref;
+
+  static auto msgref_cast(typename M::ref const& m) {
+    return boost::static_pointer_cast<typename T::const_ref::element_type, typename std::remove_reference<decltype(m)>::type::element_type>(m);
+  }
+  static auto msgref_cast(typename M::const_ref const& m) {
+    return boost::static_pointer_cast<typename T::ref::element_type, typename std::remove_reference<decltype(m)>::type::element_type>(m);
+  }
+
+protected:
+template<typename... Args>
+  MessageSubType(Args&&... args) : M(std::forward<Args>(args)...) {}
+  virtual ~MessageSubType() override {}
+};
+
+
+template<class T, class M = Message>
+class MessageInstance : public MessageSubType<T, M> {
+public:
+  using factory = MessageFactory<T>;
+
+  template<typename... Args>
+  static auto create(Args&&... args) {
+    return MessageFactory<T>::build(std::forward<Args>(args)...);
+  }
+  static auto msgref_cast(typename Message::ref const& m) {
+    return boost::static_pointer_cast<typename T::ref::element_type, typename std::remove_reference<decltype(m)>::type::element_type>(m);
+  }
+  static auto msgref_cast(typename Message::const_ref const& m) {
+    return boost::static_pointer_cast<typename T::const_ref::element_type, typename std::remove_reference<decltype(m)>::type::element_type>(m);
+  }
+
+protected:
+template<typename... Args>
+  MessageInstance(Args&&... args) : MessageSubType<T,M>(std::forward<Args>(args)...) {}
+  virtual ~MessageInstance() override {}
+};
 
 #endif

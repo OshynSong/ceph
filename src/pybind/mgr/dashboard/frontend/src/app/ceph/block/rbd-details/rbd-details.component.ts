@@ -1,6 +1,7 @@
-import { Component, Input, OnChanges } from '@angular/core';
+import { Component, Input, OnChanges, TemplateRef, ViewChild } from '@angular/core';
 
 import { CdTableSelection } from '../../../shared/models/cd-table-selection';
+import { RbdFormModel } from '../rbd-form/rbd-form.model';
 
 @Component({
   selector: 'cd-rbd-details',
@@ -8,11 +9,15 @@ import { CdTableSelection } from '../../../shared/models/cd-table-selection';
   styleUrls: ['./rbd-details.component.scss']
 })
 export class RbdDetailsComponent implements OnChanges {
+  @Input()
+  selection: CdTableSelection;
+  selectedItem: RbdFormModel;
+  @Input()
+  images: any;
+  @ViewChild('poolConfigurationSourceTpl')
+  poolConfigurationSourceTpl: TemplateRef<any>;
 
-  @Input() selection: CdTableSelection;
-  selectedItem: any;
-
-  constructor() { }
+  constructor() {}
 
   ngOnChanges() {
     if (this.selection.hasSelection) {

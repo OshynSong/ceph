@@ -5,109 +5,133 @@
   
   Positional arguments:
     <command>
-      bench                               Simple benchmark.
-      children                            Display children of snapshot.
-      clone                               Clone a snapshot into a CoW child image.
-      copy (cp)                           Copy src image to dest.
-      create                              Create an empty image.
-      deep copy (deep cp)                 Deep copy src image to dest.
-      device list (showmapped)            List mapped rbd images.
-      device map (map)                    Map an image to a block device.
-      device unmap (unmap)                Unmap a rbd device.
-      diff                                Print extents that differ since a
-                                          previous snap, or image creation.
-      disk-usage (du)                     Show disk usage stats for pool, image
-                                          or snapshot.
-      export                              Export image to file.
-      export-diff                         Export incremental diff to file.
-      feature disable                     Disable the specified image feature.
-      feature enable                      Enable the specified image feature.
-      flatten                             Fill clone with parent data (make it
-                                          independent).
-      group create                        Create a group.
-      group image add                     Add an image to a group.
-      group image list (group image ls)   List images in a group.
-      group image remove (group image rm) Remove an image from a group.
-      group list (group ls)               List rbd groups.
-      group remove (group rm)             Delete a group.
-      group rename                        Rename a group within pool.
-      group snap create                   Make a snapshot of a group.
-      group snap list (group snap ls)     List snapshots of a group.
-      group snap remove (group snap rm)   Remove a snapshot from a group.
-      group snap rename                   Rename group's snapshot.
-      image-meta get                      Image metadata get the value associated
-                                          with the key.
-      image-meta list (image-meta ls)     Image metadata list keys with values.
-      image-meta remove (image-meta rm)   Image metadata remove the key and value
-                                          associated.
-      image-meta set                      Image metadata set key with value.
-      import                              Import image from file.
-      import-diff                         Import an incremental diff.
-      info                                Show information about image size,
-                                          striping, etc.
-      journal client disconnect           Flag image journal client as
-                                          disconnected.
-      journal export                      Export image journal.
-      journal import                      Import image journal.
-      journal info                        Show information about image journal.
-      journal inspect                     Inspect image journal for structural
-                                          errors.
-      journal reset                       Reset image journal.
-      journal status                      Show status of image journal.
-      list (ls)                           List rbd images.
-      lock add                            Take a lock on an image.
-      lock list (lock ls)                 Show locks held on an image.
-      lock remove (lock rm)               Release a lock on an image.
-      merge-diff                          Merge two diff exports together.
-      mirror image demote                 Demote an image to non-primary for RBD
-                                          mirroring.
-      mirror image disable                Disable RBD mirroring for an image.
-      mirror image enable                 Enable RBD mirroring for an image.
-      mirror image promote                Promote an image to primary for RBD
-                                          mirroring.
-      mirror image resync                 Force resync to primary image for RBD
-                                          mirroring.
-      mirror image status                 Show RBD mirroring status for an image.
-      mirror pool demote                  Demote all primary images in the pool.
-      mirror pool disable                 Disable RBD mirroring by default within
-                                          a pool.
-      mirror pool enable                  Enable RBD mirroring by default within
-                                          a pool.
-      mirror pool info                    Show information about the pool
-                                          mirroring configuration.
-      mirror pool peer add                Add a mirroring peer to a pool.
-      mirror pool peer remove             Remove a mirroring peer from a pool.
-      mirror pool peer set                Update mirroring peer settings.
-      mirror pool promote                 Promote all non-primary images in the
-                                          pool.
-      mirror pool status                  Show status for all mirrored images in
-                                          the pool.
-      namespace create                    Create an RBD image namespace.
-      namespace list (namespace ls)       List RBD image namespaces.
-      namespace remove (namespace rm)     Remove an RBD image namespace.
-      object-map check                    Verify the object map is correct.
-      object-map rebuild                  Rebuild an invalid object map.
-      pool init                           Initialize pool for use by RBD.
-      remove (rm)                         Delete an image.
-      rename (mv)                         Rename image within pool.
-      resize                              Resize (expand or shrink) image.
-      snap create (snap add)              Create a snapshot.
-      snap limit clear                    Remove snapshot limit.
-      snap limit set                      Limit the number of snapshots.
-      snap list (snap ls)                 Dump list of image snapshots.
-      snap protect                        Prevent a snapshot from being deleted.
-      snap purge                          Delete all unprotected snapshots.
-      snap remove (snap rm)               Delete a snapshot.
-      snap rename                         Rename a snapshot.
-      snap rollback (snap revert)         Rollback image to snapshot.
-      snap unprotect                      Allow a snapshot to be deleted.
-      status                              Show the status of this image.
-      trash list (trash ls)               List trash images.
-      trash move (trash mv)               Move an image to the trash.
-      trash purge                         Remove all expired images from trash.
-      trash remove (trash rm)             Remove an image from trash.
-      trash restore                       Restore an image from trash.
-      watch                               Watch events on image.
+      bench                             Simple benchmark.
+      children                          Display children of an image or its
+                                        snapshot.
+      clone                             Clone a snapshot into a CoW child image.
+      config global get                 Get a global-level configuration override.
+      config global list (... ls)       List global-level configuration overrides.
+      config global remove (... rm)     Remove a global-level configuration
+                                        override.
+      config global set                 Set a global-level configuration override.
+      config image get                  Get an image-level configuration override.
+      config image list (... ls)        List image-level configuration overrides.
+      config image remove (... rm)      Remove an image-level configuration
+                                        override.
+      config image set                  Set an image-level configuration override.
+      config pool get                   Get a pool-level configuration override.
+      config pool list (... ls)         List pool-level configuration overrides.
+      config pool remove (... rm)       Remove a pool-level configuration
+                                        override.
+      config pool set                   Set a pool-level configuration override.
+      copy (cp)                         Copy src image to dest.
+      create                            Create an empty image.
+      deep copy (deep cp)               Deep copy src image to dest.
+      device list (showmapped)          List mapped rbd images.
+      device map (map)                  Map an image to a block device.
+      device unmap (unmap)              Unmap a rbd device.
+      diff                              Print extents that differ since a
+                                        previous snap, or image creation.
+      disk-usage (du)                   Show disk usage stats for pool, image or
+                                        snapshot.
+      export                            Export image to file.
+      export-diff                       Export incremental diff to file.
+      feature disable                   Disable the specified image feature.
+      feature enable                    Enable the specified image feature.
+      flatten                           Fill clone with parent data (make it
+                                        independent).
+      group create                      Create a group.
+      group image add                   Add an image to a group.
+      group image list (... ls)         List images in a group.
+      group image remove (... rm)       Remove an image from a group.
+      group list (group ls)             List rbd groups.
+      group remove (group rm)           Delete a group.
+      group rename                      Rename a group within pool.
+      group snap create                 Make a snapshot of a group.
+      group snap list (... ls)          List snapshots of a group.
+      group snap remove (... rm)        Remove a snapshot from a group.
+      group snap rename                 Rename group's snapshot.
+      group snap rollback               Rollback group to snapshot.
+      image-meta get                    Image metadata get the value associated
+                                        with the key.
+      image-meta list (image-meta ls)   Image metadata list keys with values.
+      image-meta remove (image-meta rm) Image metadata remove the key and value
+                                        associated.
+      image-meta set                    Image metadata set key with value.
+      import                            Import image from file.
+      import-diff                       Import an incremental diff.
+      info                              Show information about image size,
+                                        striping, etc.
+      journal client disconnect         Flag image journal client as disconnected.
+      journal export                    Export image journal.
+      journal import                    Import image journal.
+      journal info                      Show information about image journal.
+      journal inspect                   Inspect image journal for structural
+                                        errors.
+      journal reset                     Reset image journal.
+      journal status                    Show status of image journal.
+      list (ls)                         List rbd images.
+      lock add                          Take a lock on an image.
+      lock list (lock ls)               Show locks held on an image.
+      lock remove (lock rm)             Release a lock on an image.
+      merge-diff                        Merge two diff exports together.
+      migration abort                   Cancel interrupted image migration.
+      migration commit                  Commit image migration.
+      migration execute                 Execute image migration.
+      migration prepare                 Prepare image migration.
+      mirror image demote               Demote an image to non-primary for RBD
+                                        mirroring.
+      mirror image disable              Disable RBD mirroring for an image.
+      mirror image enable               Enable RBD mirroring for an image.
+      mirror image promote              Promote an image to primary for RBD
+                                        mirroring.
+      mirror image resync               Force resync to primary image for RBD
+                                        mirroring.
+      mirror image status               Show RBD mirroring status for an image.
+      mirror pool demote                Demote all primary images in the pool.
+      mirror pool disable               Disable RBD mirroring by default within a
+                                        pool.
+      mirror pool enable                Enable RBD mirroring by default within a
+                                        pool.
+      mirror pool info                  Show information about the pool mirroring
+                                        configuration.
+      mirror pool peer add              Add a mirroring peer to a pool.
+      mirror pool peer remove           Remove a mirroring peer from a pool.
+      mirror pool peer set              Update mirroring peer settings.
+      mirror pool promote               Promote all non-primary images in the
+                                        pool.
+      mirror pool status                Show status for all mirrored images in
+                                        the pool.
+      namespace create                  Create an RBD image namespace.
+      namespace list (namespace ls)     List RBD image namespaces.
+      namespace remove (namespace rm)   Remove an RBD image namespace.
+      object-map check                  Verify the object map is correct.
+      object-map rebuild                Rebuild an invalid object map.
+      perf image iostat                 Display image IO statistics.
+      perf image iotop                  Display a top-like IO monitor.
+      pool init                         Initialize pool for use by RBD.
+      pool stats                        Display pool statistics.
+      remove (rm)                       Delete an image.
+      rename (mv)                       Rename image within pool.
+      resize                            Resize (expand or shrink) image.
+      snap create (snap add)            Create a snapshot.
+      snap limit clear                  Remove snapshot limit.
+      snap limit set                    Limit the number of snapshots.
+      snap list (snap ls)               Dump list of image snapshots.
+      snap protect                      Prevent a snapshot from being deleted.
+      snap purge                        Delete all unprotected snapshots.
+      snap remove (snap rm)             Delete a snapshot.
+      snap rename                       Rename a snapshot.
+      snap rollback (snap revert)       Rollback image to snapshot.
+      snap unprotect                    Allow a snapshot to be deleted.
+      sparsify                          Reclaim space for zeroed image extents.
+      status                            Show the status of this image.
+      trash list (trash ls)             List trash images.
+      trash move (trash mv)             Move an image to the trash.
+      trash purge                       Remove all expired images from trash.
+      trash remove (trash rm)           Remove an image from trash.
+      trash restore                     Restore an image from trash.
+      watch                             Watch events on image.
   
   Optional arguments:
     -c [ --conf ] arg     path to cluster configuration
@@ -133,7 +157,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -149,26 +173,27 @@
   rbd help children
   usage: rbd children [--pool <pool>] [--namespace <namespace>] 
                       [--image <image>] [--snap <snap>] [--snap-id <snap-id>] 
-                      [--all] [--format <format>] [--pretty-format] 
-                      <snap-spec> 
+                      [--all] [--descendants] [--format <format>] 
+                      [--pretty-format] 
+                      <image-or-snap-spec> 
   
-  Display children of snapshot.
+  Display children of an image or its snapshot.
   
   Positional arguments
-    <snap-spec>          snapshot specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+    <image-or-snap-spec>  image or snapshot specification
+                          (example:
+                          [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>])
   
   Optional arguments
-    -p [ --pool ] arg    pool name
-    --namespace arg      namespace name
-    --image arg          image name
-    --snap arg           snapshot name
-    --snap-id arg        snapshot id
-    -a [ --all ]         list all children of snapshot (include trash)
-    --format arg         output format (plain, json, or xml) [default: plain]
-    --pretty-format      pretty formatting (json and xml)
+    -p [ --pool ] arg     pool name
+    --namespace arg       namespace name
+    --image arg           image name
+    --snap arg            snapshot name
+    --snap-id arg         snapshot id
+    -a [ --all ]          list all children (include trash)
+    --descendants         include all descendants
+    --format arg          output format (plain, json, or xml) [default: plain]
+    --pretty-format       pretty formatting (json and xml)
   
   rbd help clone
   usage: rbd clone [--pool <pool>] [--namespace <namespace>] [--image <image>] 
@@ -188,11 +213,10 @@
   Positional arguments
     <source-snap-spec>        source snapshot specification
                               (example:
-                              [<pool-name>/[<namespace-name>/]]<image-name>@<snaps
-                              hot-name>)
+                              [<pool-name>/[<namespace>/]]<image-name>@<snapshot-n
+                              ame>)
     <dest-image-spec>         destination image specification
-                              (example:
-                              [<pool-name>/[<namespace-name>/]]<image-name>)
+                              (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg         source pool name
@@ -212,13 +236,166 @@
     --stripe-count arg        stripe count
     --data-pool arg           data pool
     --journal-splay-width arg number of active journal objects
-    --journal-object-size arg size of journal objects
+    --journal-object-size arg size of journal objects [4K <= size <= 64M]
     --journal-pool arg        pool for journal objects
   
   Image Features:
     (*) supports enabling/disabling on existing images
     (-) supports disabling-only on existing images
     (+) enabled by default for new images if features not specified
+  
+  rbd help config global get
+  usage: rbd config global get <config-entity> <key> 
+  
+  Get a global-level configuration override.
+  
+  Positional arguments
+    <config-entity>      config entity (global, client, client.<id>)
+    <key>                config key
+  
+  rbd help config global list
+  usage: rbd config global list [--format <format>] [--pretty-format] 
+                                <config-entity> 
+  
+  List global-level configuration overrides.
+  
+  Positional arguments
+    <config-entity>      config entity (global, client, client.<id>)
+  
+  Optional arguments
+    --format arg         output format (plain, json, or xml) [default: plain]
+    --pretty-format      pretty formatting (json and xml)
+  
+  rbd help config global remove
+  usage: rbd config global remove <config-entity> <key> 
+  
+  Remove a global-level configuration override.
+  
+  Positional arguments
+    <config-entity>      config entity (global, client, client.<id>)
+    <key>                config key
+  
+  rbd help config global set
+  usage: rbd config global set <config-entity> <key> <value> 
+  
+  Set a global-level configuration override.
+  
+  Positional arguments
+    <config-entity>      config entity (global, client, client.<id>)
+    <key>                config key
+    <value>              config value
+  
+  rbd help config image get
+  usage: rbd config image get [--pool <pool>] [--namespace <namespace>] 
+                              [--image <image>] 
+                              <image-spec> <key> 
+  
+  Get an image-level configuration override.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+    <key>                config key
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+  
+  rbd help config image list
+  usage: rbd config image list [--pool <pool>] [--namespace <namespace>] 
+                               [--image <image>] [--format <format>] 
+                               [--pretty-format] 
+                               <image-spec> 
+  
+  List image-level configuration overrides.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+    --format arg         output format (plain, json, or xml) [default: plain]
+    --pretty-format      pretty formatting (json and xml)
+  
+  rbd help config image remove
+  usage: rbd config image remove [--pool <pool>] [--namespace <namespace>] 
+                                 [--image <image>] 
+                                 <image-spec> <key> 
+  
+  Remove an image-level configuration override.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+    <key>                config key
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+  
+  rbd help config image set
+  usage: rbd config image set [--pool <pool>] [--namespace <namespace>] 
+                              [--image <image>] 
+                              <image-spec> <key> <value> 
+  
+  Set an image-level configuration override.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+    <key>                config key
+    <value>              config value
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+  
+  rbd help config pool get
+  usage: rbd config pool get <pool-name> <key> 
+  
+  Get a pool-level configuration override.
+  
+  Positional arguments
+    <pool-name>          pool name
+    <key>                config key
+  
+  rbd help config pool list
+  usage: rbd config pool list [--format <format>] [--pretty-format] 
+                              <pool-name> 
+  
+  List pool-level configuration overrides.
+  
+  Positional arguments
+    <pool-name>          pool name
+  
+  Optional arguments
+    --format arg         output format (plain, json, or xml) [default: plain]
+    --pretty-format      pretty formatting (json and xml)
+  
+  rbd help config pool remove
+  usage: rbd config pool remove <pool-name> <key> 
+  
+  Remove a pool-level configuration override.
+  
+  Positional arguments
+    <pool-name>          pool name
+    <key>                config key
+  
+  rbd help config pool set
+  usage: rbd config pool set <pool-name> <key> <value> 
+  
+  Set a pool-level configuration override.
+  
+  Positional arguments
+    <pool-name>          pool name
+    <key>                config key
+    <value>              config value
   
   rbd help copy
   usage: rbd copy [--pool <pool>] [--namespace <namespace>] [--image <image>] 
@@ -239,11 +416,11 @@
   Positional arguments
     <source-image-or-snap-spec>  source image or snapshot specification
                                  (example:
-                                 [<pool-name>/[<namespace-name>/]]<image-name>[@<s
-                                 nap-name>])
+                                 [<pool-name>/[<namespace>/]]<image-name>[@<snap-n
+                                 ame>])
     <dest-image-spec>            destination image specification
                                  (example:
-                                 [<pool-name>/[<namespace-name>/]]<image-name>)
+                                 [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg            source pool name
@@ -263,7 +440,7 @@
     --stripe-count arg           stripe count
     --data-pool arg              data pool
     --journal-splay-width arg    number of active journal objects
-    --journal-object-size arg    size of journal objects
+    --journal-object-size arg    size of journal objects [4K <= size <= 64M]
     --journal-pool arg           pool for journal objects
     --sparse-size arg            sparse size in B/K/M [default: 4K]
     --no-progress                disable progress output
@@ -290,8 +467,7 @@
   
   Positional arguments
     <image-spec>              image specification
-                              (example:
-                              [<pool-name>/[<namespace-name>/]]<image-name>)
+                              (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg         pool name
@@ -310,7 +486,7 @@
     --stripe-count arg        stripe count
     --data-pool arg           data pool
     --journal-splay-width arg number of active journal objects
-    --journal-object-size arg size of journal objects
+    --journal-object-size arg size of journal objects [4K <= size <= 64M]
     --journal-pool arg        pool for journal objects
     --thick-provision         fully allocate storage and zero image
     -s [ --size ] arg         image size (in M/G/T) [default: M]
@@ -341,11 +517,11 @@
   Positional arguments
     <source-image-or-snap-spec>  source image or snapshot specification
                                  (example:
-                                 [<pool-name>/[<namespace-name>/]]<image-name>[@<s
-                                 nap-name>])
+                                 [<pool-name>/[<namespace>/]]<image-name>[@<snap-n
+                                 ame>])
     <dest-image-spec>            destination image specification
                                  (example:
-                                 [<pool-name>/[<namespace-name>/]]<image-name>)
+                                 [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg            source pool name
@@ -365,7 +541,7 @@
     --stripe-count arg           stripe count
     --data-pool arg              data pool
     --journal-splay-width arg    number of active journal objects
-    --journal-object-size arg    size of journal objects
+    --journal-object-size arg    size of journal objects [4K <= size <= 64M]
     --journal-pool arg           pool for journal objects
     --flatten                    fill clone with parent data (make it independent)
     --no-progress                disable progress output
@@ -398,8 +574,8 @@
   Positional arguments
     <image-or-snap-spec>     image or snapshot specification
                              (example:
-                             [<pool-name>/[<namespace-name>/]]<image-name>[@<snap-
-                             name>])
+                             [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>
+                             ])
   
   Optional arguments
     -t [ --device-type ] arg device type [ggate, krbd (default), nbd]
@@ -441,8 +617,7 @@
   Positional arguments
     <image-or-snap-spec>  image or snapshot specification
                           (example:
-                          [<pool-name>/[<namespace-name>/]]<image-name>[@<snap-nam
-                          e>])
+                          [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>])
   
   Optional arguments
     -p [ --pool ] arg     pool name
@@ -465,8 +640,7 @@
   Positional arguments
     <image-or-snap-spec>  image or snapshot specification
                           (example:
-                          [<pool-name>/[<namespace-name>/]]<image-name>[@<snap-nam
-                          e>])
+                          [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>])
   
   Optional arguments
     -p [ --pool ] arg     pool name
@@ -489,8 +663,8 @@
   Positional arguments
     <source-image-or-snap-spec>  source image or snapshot specification
                                  (example:
-                                 [<pool-name>/[<namespace-name>/]]<image-name>[@<s
-                                 nap-name>])
+                                 [<pool-name>/[<namespace>/]]<image-name>[@<snap-n
+                                 ame>])
     <path-name>                  export file (or '-' for stdout)
   
   Optional arguments
@@ -514,8 +688,8 @@
   Positional arguments
     <source-image-or-snap-spec>  source image or snapshot specification
                                  (example:
-                                 [<pool-name>/[<namespace-name>/]]<image-name>[@<s
-                                 nap-name>])
+                                 [<pool-name>/[<namespace>/]]<image-name>[@<snap-n
+                                 ame>])
     <path-name>                  export file (or '-' for stdout)
   
   Optional arguments
@@ -537,7 +711,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <features>           image features
                          [exclusive-lock, object-map, journaling]
   
@@ -558,8 +732,7 @@
   
   Positional arguments
     <image-spec>              image specification
-                              (example:
-                              [<pool-name>/[<namespace-name>/]]<image-name>)
+                              (example: [<pool-name>/[<namespace>/]]<image-name>)
     <features>                image features
                               [exclusive-lock, object-map, journaling]
   
@@ -568,7 +741,7 @@
     --namespace arg           namespace name
     --image arg               image name
     --journal-splay-width arg number of active journal objects
-    --journal-object-size arg size of journal objects
+    --journal-object-size arg size of journal objects [4K <= size <= 64M]
     --journal-pool arg        pool for journal objects
   
   rbd help flatten
@@ -580,7 +753,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -597,7 +770,7 @@
   
   Positional arguments
     <group-spec>         group specification
-                         (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                         (example: [<pool-name>/[<namespace>/]]<group-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -616,9 +789,9 @@
   
   Positional arguments
     <group-spec>          group specification
-                          (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                          (example: [<pool-name>/[<namespace>/]]<group-name>)
     <image-spec>          image specification
-                          (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                          (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     --group-pool arg      group pool name
@@ -639,7 +812,7 @@
   
   Positional arguments
     <group-spec>         group specification
-                         (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                         (example: [<pool-name>/[<namespace>/]]<group-name>)
   
   Optional arguments
     --format arg         output format (plain, json, or xml) [default: plain]
@@ -661,9 +834,9 @@
   
   Positional arguments
     <group-spec>          group specification
-                          (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                          (example: [<pool-name>/[<namespace>/]]<group-name>)
     <image-spec>          image specification
-                          (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                          (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     --group-pool arg      group pool name
@@ -678,8 +851,13 @@
   rbd help group list
   usage: rbd group list [--pool <pool>] [--namespace <namespace>] 
                         [--format <format>] [--pretty-format] 
+                        <pool-spec> 
   
   List rbd groups.
+  
+  Positional arguments
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -696,7 +874,7 @@
   
   Positional arguments
     <group-spec>         group specification
-                         (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                         (example: [<pool-name>/[<namespace>/]]<group-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -714,9 +892,9 @@
   
   Positional arguments
     <source-group-spec>  source group specification
-                         (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                         (example: [<pool-name>/[<namespace>/]]<group-name>)
     <dest-group-spec>    destination group specification
-                         (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                         (example: [<pool-name>/[<namespace>/]]<group-name>)
   
   Optional arguments
     -p [ --pool ] arg    source pool name
@@ -736,8 +914,7 @@
   Positional arguments
     <group-snap-spec>    group specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<group-name>@<snap-name>
-                         )
+                         [<pool-name>/[<namespace>/]]<group-name>@<snap-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -755,7 +932,7 @@
   
   Positional arguments
     <group-spec>         group specification
-                         (example: [<pool-name>/[<namespace-name>/]]<group-name>)
+                         (example: [<pool-name>/[<namespace>/]]<group-name>)
   
   Optional arguments
     --format arg         output format (plain, json, or xml) [default: plain]
@@ -774,8 +951,7 @@
   Positional arguments
     <group-snap-spec>    group specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<group-name>@<snap-name>
-                         )
+                         [<pool-name>/[<namespace>/]]<group-name>@<snap-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -794,8 +970,7 @@
   Positional arguments
     <group-snap-spec>    group specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<group-name>@<snap-name>
-                         )
+                         [<pool-name>/[<namespace>/]]<group-name>@<snap-name>)
     <dest-snap>          destination snapshot name
                          (example: <snapshot-name>)
   
@@ -806,6 +981,26 @@
     --snap arg           snapshot name
     --dest-snap arg      destination snapshot name
   
+  rbd help group snap rollback
+  usage: rbd group snap rollback [--no-progress] [--pool <pool>] 
+                                 [--namespace <namespace>] [--group <group>] 
+                                 [--snap <snap>] 
+                                 <group-snap-spec> 
+  
+  Rollback group to snapshot.
+  
+  Positional arguments
+    <group-snap-spec>    group specification
+                         (example:
+                         [<pool-name>/[<namespace>/]]<group-name>@<snap-name>)
+  
+  Optional arguments
+    --no-progress        disable progress output
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --group arg          group name
+    --snap arg           snapshot name
+  
   rbd help image-meta get
   usage: rbd image-meta get [--pool <pool>] [--namespace <namespace>] 
                             [--image <image>] 
@@ -815,7 +1010,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <key>                image meta key
   
   Optional arguments
@@ -833,7 +1028,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -851,7 +1046,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <key>                image meta key
   
   Optional arguments
@@ -868,7 +1063,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <key>                image meta key
     <value>              image meta value
   
@@ -898,8 +1093,7 @@
   Positional arguments
     <path-name>               import file (or '-' for stdin)
     <dest-image-spec>         destination image specification
-                              (example:
-                              [<pool-name>/[<namespace-name>/]]<image-name>)
+                              (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     --path arg                import file (or '-' for stdin)
@@ -919,7 +1113,7 @@
     --stripe-count arg        stripe count
     --data-pool arg           data pool
     --journal-splay-width arg number of active journal objects
-    --journal-object-size arg size of journal objects
+    --journal-object-size arg size of journal objects [4K <= size <= 64M]
     --journal-pool arg        pool for journal objects
     --sparse-size arg         sparse size in B/K/M [default: 4K]
     --no-progress             disable progress output
@@ -943,7 +1137,7 @@
   Positional arguments
     <path-name>          import file (or '-' for stdin)
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     --path arg           import file (or '-' for stdin)
@@ -964,8 +1158,7 @@
   Positional arguments
     <image-or-snap-spec>  image or snapshot specification
                           (example:
-                          [<pool-name>/[<namespace-name>/]]<image-name>[@<snap-nam
-                          e>])
+                          [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>])
   
   Optional arguments
     -p [ --pool ] arg     pool name
@@ -986,8 +1179,7 @@
   
   Positional arguments
     <journal-spec>       journal specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<journal-name>)
+                         (example: [<pool-name>/[<namespace>/]]<journal-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1006,8 +1198,7 @@
   
   Positional arguments
     <source-journal-spec>  source journal specification
-                           (example:
-                           [<pool-name>/[<namespace-name>/]]<journal-name>)
+                           (example: [<pool-name>/[<namespace>/]]<journal-name>)
     <path-name>            export file (or '-' for stdout)
   
   Optional arguments
@@ -1031,8 +1222,7 @@
   Positional arguments
     <path-name>          import file (or '-' for stdin)
     <dest-journal-spec>  destination journal specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<journal-name>)
+                         (example: [<pool-name>/[<namespace>/]]<journal-name>)
   
   Optional arguments
     --path arg           import file (or '-' for stdin)
@@ -1053,8 +1243,7 @@
   
   Positional arguments
     <journal-spec>       journal specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<journal-name>)
+                         (example: [<pool-name>/[<namespace>/]]<journal-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1073,8 +1262,7 @@
   
   Positional arguments
     <journal-spec>       journal specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<journal-name>)
+                         (example: [<pool-name>/[<namespace>/]]<journal-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1092,8 +1280,7 @@
   
   Positional arguments
     <journal-spec>       journal specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<journal-name>)
+                         (example: [<pool-name>/[<namespace>/]]<journal-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1111,8 +1298,7 @@
   
   Positional arguments
     <journal-spec>       journal specification
-                         (example:
-                         [<pool-name>/[<namespace-name>/]]<journal-name>)
+                         (example: [<pool-name>/[<namespace>/]]<journal-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1125,13 +1311,13 @@
   rbd help list
   usage: rbd list [--long] [--pool <pool>] [--namespace <namespace>] 
                   [--format <format>] [--pretty-format] 
-                  <pool-name> <namespace-name> 
+                  <pool-spec> 
   
   List rbd images.
   
   Positional arguments
-    <pool-name>          pool name
-    <namespace-name>     namespace name
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
   
   Optional arguments
     -l [ --long ]        long listing format
@@ -1149,7 +1335,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <lock-id>            unique lock id
   
   Optional arguments
@@ -1167,7 +1353,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1185,7 +1371,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <lock-id>            unique lock id
     <locker>             locker client
   
@@ -1209,6 +1395,111 @@
     --path arg           path to merged diff (or '-' for stdout)
     --no-progress        disable progress output
   
+  rbd help migration abort
+  usage: rbd migration abort [--pool <pool>] [--namespace <namespace>] 
+                             [--image <image>] [--no-progress] 
+                             <image-spec> 
+  
+  Cancel interrupted image migration.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+    --no-progress        disable progress output
+  
+  rbd help migration commit
+  usage: rbd migration commit [--pool <pool>] [--namespace <namespace>] 
+                              [--image <image>] [--no-progress] [--force] 
+                              <image-spec> 
+  
+  Commit image migration.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+    --no-progress        disable progress output
+    --force              proceed even if the image has children
+  
+  rbd help migration execute
+  usage: rbd migration execute [--pool <pool>] [--namespace <namespace>] 
+                               [--image <image>] [--no-progress] 
+                               <image-spec> 
+  
+  Execute image migration.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+    --no-progress        disable progress output
+  
+  rbd help migration prepare
+  usage: rbd migration prepare [--pool <pool>] [--namespace <namespace>] 
+                               [--image <image>] [--dest-pool <dest-pool>] 
+                               [--dest-namespace <dest-namespace>] 
+                               [--dest <dest>] [--image-format <image-format>] 
+                               [--new-format] [--order <order>] 
+                               [--object-size <object-size>] 
+                               [--image-feature <image-feature>] 
+                               [--image-shared] [--stripe-unit <stripe-unit>] 
+                               [--stripe-count <stripe-count>] 
+                               [--data-pool <data-pool>] 
+                               [--journal-splay-width <journal-splay-width>] 
+                               [--journal-object-size <journal-object-size>] 
+                               [--journal-pool <journal-pool>] [--flatten] 
+                               <source-image-spec> <dest-image-spec> 
+  
+  Prepare image migration.
+  
+  Positional arguments
+    <source-image-spec>       source image specification
+                              (example: [<pool-name>/[<namespace>/]]<image-name>)
+    <dest-image-spec>         destination image specification
+                              (example: [<pool-name>/[<namespace>/]]<image-name>)
+  
+  Optional arguments
+    -p [ --pool ] arg         source pool name
+    --namespace arg           source namespace name
+    --image arg               source image name
+    --dest-pool arg           destination pool name
+    --dest-namespace arg      destination namespace name
+    --dest arg                destination image name
+    --image-format arg        image format [1 (deprecated) or 2]
+    --new-format              use image format 2
+                              (deprecated)
+    --order arg               object order [12 <= order <= 25]
+    --object-size arg         object size in B/K/M [4K <= object size <= 32M]
+    --image-feature arg       image features
+                              [layering(+), exclusive-lock(+*), object-map(+*),
+                              deep-flatten(+-), journaling(*)]
+    --image-shared            shared image
+    --stripe-unit arg         stripe unit in B/K/M
+    --stripe-count arg        stripe count
+    --data-pool arg           data pool
+    --journal-splay-width arg number of active journal objects
+    --journal-object-size arg size of journal objects [4K <= size <= 64M]
+    --journal-pool arg        pool for journal objects
+    --flatten                 fill clone with parent data (make it independent)
+  
+  Image Features:
+    (*) supports enabling/disabling on existing images
+    (-) supports disabling-only on existing images
+    (+) enabled by default for new images if features not specified
+  
   rbd help mirror image demote
   usage: rbd mirror image demote [--pool <pool>] [--namespace <namespace>] 
                                  [--image <image>] 
@@ -1218,7 +1509,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1234,7 +1525,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     --force              disable even if not primary
@@ -1251,7 +1542,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1267,7 +1558,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     --force              promote even if not cleanly demoted by remote cluster
@@ -1284,7 +1575,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1301,7 +1592,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1349,7 +1640,7 @@
   
   rbd help mirror pool info
   usage: rbd mirror pool info [--pool <pool>] [--format <format>] 
-                              [--pretty-format] 
+                              [--pretty-format] [--all] 
                               <pool-name> 
   
   Show information about the pool mirroring configuration.
@@ -1361,11 +1652,14 @@
     -p [ --pool ] arg    pool name
     --format arg         output format (plain, json, or xml) [default: plain]
     --pretty-format      pretty formatting (json and xml)
+    --all                list all attributes
   
   rbd help mirror pool peer add
   usage: rbd mirror pool peer add [--pool <pool>] 
                                   [--remote-client-name <remote-client-name>] 
                                   [--remote-cluster <remote-cluster>] 
+                                  [--remote-mon-host <remote-mon-host>] 
+                                  [--remote-key-file <remote-key-file>] 
                                   <pool-name> <remote-cluster-spec> 
   
   Add a mirroring peer to a pool.
@@ -1379,6 +1673,8 @@
     -p [ --pool ] arg        pool name
     --remote-client-name arg remote client name
     --remote-cluster arg     remote cluster name
+    --remote-mon-host arg    remote mon host(s)
+    --remote-key-file arg    path to file containing remote key
   
   rbd help mirror pool peer remove
   usage: rbd mirror pool peer remove [--pool <pool>] 
@@ -1402,8 +1698,8 @@
   Positional arguments
     <pool-name>          pool name
     <uuid>               peer uuid
-    <key>                peer parameter [client or cluster]
-    <value>              new client or cluster name
+    <key>                peer parameter [client, cluster, mon-host, key-file]
+    <value>              new value for specified key
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1439,13 +1735,13 @@
   
   rbd help namespace create
   usage: rbd namespace create [--pool <pool>] [--namespace <namespace>] 
-                              <pool-name> <namespace-name> 
+                              <pool-spec> 
   
   Create an RBD image namespace.
   
   Positional arguments
-    <pool-name>          pool name
-    <namespace-name>     namespace name
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1467,13 +1763,13 @@
   
   rbd help namespace remove
   usage: rbd namespace remove [--pool <pool>] [--namespace <namespace>] 
-                              <pool-name> <namespace-name> 
+                              <pool-spec> 
   
   Remove an RBD image namespace.
   
   Positional arguments
-    <pool-name>          pool name
-    <namespace-name>     namespace name
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1489,8 +1785,7 @@
   Positional arguments
     <image-or-snap-spec>  image or snapshot specification
                           (example:
-                          [<pool-name>/[<namespace-name>/]]<image-name>[@<snap-nam
-                          e>])
+                          [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>])
   
   Optional arguments
     -p [ --pool ] arg     pool name
@@ -1509,8 +1804,7 @@
   Positional arguments
     <image-or-snap-spec>  image or snapshot specification
                           (example:
-                          [<pool-name>/[<namespace-name>/]]<image-name>[@<snap-nam
-                          e>])
+                          [<pool-name>/[<namespace>/]]<image-name>[@<snap-name>])
   
   Optional arguments
     -p [ --pool ] arg     pool name
@@ -1518,6 +1812,43 @@
     --image arg           image name
     --snap arg            snapshot name
     --no-progress         disable progress output
+  
+  rbd help perf image iostat
+  usage: rbd perf image iostat [--pool <pool>] [--namespace <namespace>] 
+                               [--iterations <iterations>] [--sort-by <sort-by>] 
+                               [--format <format>] [--pretty-format] 
+                               <pool-spec> 
+  
+  Display image IO statistics.
+  
+  Positional arguments
+    <pool-spec>                pool specification
+                               (example: <pool-name>[/<namespace>]
+  
+  Optional arguments
+    -p [ --pool ] arg          pool name
+    --namespace arg            namespace name
+    --iterations arg           iterations of metric collection [> 0]
+    --sort-by arg (=write_ops) sort-by IO metric (write-ops, read-ops,
+                               write-bytes, read-bytes, write-latency,
+                               read-latency) [default: write-ops]
+    --format arg               output format (plain, json, or xml) [default:
+                               plain]
+    --pretty-format            pretty formatting (json and xml)
+  
+  rbd help perf image iotop
+  usage: rbd perf image iotop [--pool <pool>] [--namespace <namespace>] 
+                              <pool-spec> 
+  
+  Display a top-like IO monitor.
+  
+  Positional arguments
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
   
   rbd help pool init
   usage: rbd pool init [--pool <pool>] [--force] 
@@ -1533,6 +1864,24 @@
     --force              force initialize pool for RBD use if registered by
                          another application
   
+  rbd help pool stats
+  usage: rbd pool stats [--pool <pool>] [--namespace <namespace>] 
+                        [--format <format>] [--pretty-format] 
+                        <pool-spec> 
+  
+  Display pool statistics.
+  
+  Positional arguments
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --format arg         output format (plain, json, or xml) [default: plain]
+    --pretty-format      pretty formatting (json and xml)
+  
+  Note: legacy v1 images are not included in stats
   rbd help remove
   usage: rbd remove [--pool <pool>] [--namespace <namespace>] [--image <image>] 
                     [--no-progress] 
@@ -1542,7 +1891,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1560,9 +1909,9 @@
   
   Positional arguments
     <source-image-spec>  source image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
     <dest-image-spec>    destination image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    source pool name
@@ -1582,7 +1931,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1602,8 +1951,7 @@
   Positional arguments
     <snap-spec>          snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1620,7 +1968,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1636,7 +1984,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1654,7 +2002,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1675,8 +2023,7 @@
   Positional arguments
     <snap-spec>          snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1693,7 +2040,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1704,8 +2051,9 @@
   
   rbd help snap remove
   usage: rbd snap remove [--pool <pool>] [--namespace <namespace>] 
-                         [--image <image>] [--snap <snap>] [--no-progress] 
-                         [--image-id <image-id>] [--force] 
+                         [--image <image>] [--snap <snap>] 
+                         [--image-id <image-id>] [--snap-id <snap-id>] 
+                         [--no-progress] [--force] 
                          <snap-spec> 
   
   Delete a snapshot.
@@ -1713,16 +2061,16 @@
   Positional arguments
     <snap-spec>          snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
     --namespace arg      namespace name
     --image arg          image name
     --snap arg           snapshot name
-    --no-progress        disable progress output
     --image-id arg       image id
+    --snap-id arg        snapshot id
+    --no-progress        disable progress output
     --force              flatten children and unprotect snapshot if needed.
   
   rbd help snap rename
@@ -1738,12 +2086,10 @@
   Positional arguments
     <source-snap-spec>   source snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
     <dest-snap-spec>     destination snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
   
   Optional arguments
     -p [ --pool ] arg    source pool name
@@ -1765,8 +2111,7 @@
   Positional arguments
     <snap-spec>          snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1786,8 +2131,7 @@
   Positional arguments
     <snap-spec>          snapshot specification
                          (example:
-                         [<pool-name>/[<namespace-name>/]]<image-name>@<snapshot-n
-                         ame>)
+                         [<pool-name>/[<namespace>/]]<image-name>@<snapshot-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1795,6 +2139,25 @@
     --image arg          image name
     --snap arg           snapshot name
     --image-id arg       image id
+  
+  rbd help sparsify
+  usage: rbd sparsify [--pool <pool>] [--namespace <namespace>] 
+                      [--image <image>] [--no-progress] 
+                      [--sparse-size <sparse-size>] 
+                      <image-spec> 
+  
+  Reclaim space for zeroed image extents.
+  
+  Positional arguments
+    <image-spec>         image specification
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
+  
+  Optional arguments
+    -p [ --pool ] arg    pool name
+    --namespace arg      namespace name
+    --image arg          image name
+    --no-progress        disable progress output
+    --sparse-size arg    sparse size in B/K/M [default: 4K]
   
   rbd help status
   usage: rbd status [--pool <pool>] [--namespace <namespace>] [--image <image>] 
@@ -1805,7 +2168,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1817,13 +2180,13 @@
   rbd help trash list
   usage: rbd trash list [--pool <pool>] [--namespace <namespace>] [--all] 
                         [--long] [--format <format>] [--pretty-format] 
-                        <pool-name> <namespace-name> 
+                        <pool-spec> 
   
   List trash images.
   
   Positional arguments
-    <pool-name>          pool name
-    <namespace-name>     namespace name
+    <pool-spec>          pool specification
+                         (example: <pool-name>[/<namespace>]
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1842,8 +2205,7 @@
   
   Positional arguments
     <image-spec>            image specification
-                            (example:
-                            [<pool-name>/[<namespace-name>/]]<image-name>)
+                            (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg       pool name
@@ -1856,13 +2218,13 @@
   usage: rbd trash purge [--pool <pool>] [--namespace <namespace>] 
                          [--no-progress] [--expired-before <expired-before>] 
                          [--threshold <threshold>] 
-                         <pool-name> <namespace-name> 
+                         <pool-spec> 
   
   Remove all expired images from trash.
   
   Positional arguments
-    <pool-name>           pool name
-    <namespace-name>      namespace name
+    <pool-spec>           pool specification
+                          (example: <pool-name>[/<namespace>]
   
   Optional arguments
     -p [ --pool ] arg     pool name
@@ -1881,7 +2243,7 @@
   
   Positional arguments
     <image-id>           image id
-                         (example: [<pool-name>/[<namespace-name>/]]<image-id>)
+                         (example: [<pool-name>/[<namespace>/]]<image-id>)
   
   Optional arguments
     -p [ --pool ] arg    pool name
@@ -1915,7 +2277,7 @@
   
   Positional arguments
     <image-spec>         image specification
-                         (example: [<pool-name>/[<namespace-name>/]]<image-name>)
+                         (example: [<pool-name>/[<namespace>/]]<image-name>)
   
   Optional arguments
     -p [ --pool ] arg    pool name

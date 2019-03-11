@@ -275,7 +275,7 @@ function test_mon_injectargs_IEC()
   # actually expect IEC units to be passed.
   # Keep in mind that all integer based options that are based on bytes
   # (i.e., INT, LONG, U32, U64) will accept IEC unit modifiers, as well as SI
-  # unit modifiers (for backwards compatibility and convinience) and be parsed
+  # unit modifiers (for backwards compatibility and convenience) and be parsed
   # to base 2.
   initial_value=$(get_config_value_or_die "mon.a" "mon_data_size_warn")
   $SUDO ceph daemon mon.a config set mon_data_size_warn 15000000000
@@ -613,26 +613,6 @@ function test_auth()
   # script mode
   echo 'auth del client.xx' | ceph
   expect_false ceph auth get client.xx
-
-  #
-  # get / set auid
-  #
-  local auid=444
-  ceph-authtool --create-keyring --name client.TEST --gen-key --set-uid $auid TEST-keyring
-  expect_false ceph auth import --in-file TEST-keyring
-  rm TEST-keyring
-  ceph-authtool --create-keyring --name client.TEST --gen-key --cap mon "allow r" --set-uid $auid TEST-keyring
-  ceph auth import --in-file TEST-keyring
-  rm TEST-keyring
-  ceph auth get client.TEST > $TMPFILE
-  check_response "auid = $auid"
-  ceph --format json-pretty auth get client.TEST > $TMPFILE
-  check_response '"auid": '$auid
-  ceph auth ls > $TMPFILE
-  check_response "auid: $auid"
-  ceph --format json-pretty auth ls > $TMPFILE
-  check_response '"auid": '$auid
-  ceph auth del client.TEST
 }
 
 function test_auth_profiles()
@@ -738,10 +718,19 @@ function test_mon_misc()
   ceph --concise osd dump | grep '^epoch'
 
   ceph osd df | grep 'MIN/MAX VAR'
+  osd_class=$(ceph osd crush get-device-class 0)
+  ceph osd df tree class $osd_class | grep 'osd.0'
+  ceph osd crush rm-device-class 0
+  # create class first in case old device class may
+  # have already been automatically destroyed
+  ceph osd crush class create $osd_class
+  ceph osd df tree class $osd_class | expect_false grep 'osd.0'
+  ceph osd crush set-device-class $osd_class 0
+  ceph osd df tree name osd.0 | grep 'osd.0'
 
   # df
   ceph df > $TMPFILE
-  grep GLOBAL $TMPFILE
+  grep RAW $TMPFILE
   grep -v DIRTY $TMPFILE
   ceph df detail > $TMPFILE
   grep DIRTY $TMPFILE
@@ -937,7 +926,6 @@ function test_mon_mds()
   fail_all_mds $FS_NAME
 
   ceph mds compat show
-  expect_false ceph mds deactivate 2
   ceph fs dump
   ceph fs get $FS_NAME
   for mds_gid in $(get_mds_gids $FS_NAME) ; do
@@ -1402,7 +1390,7 @@ function test_mon_osd()
   ceph osd blacklist ls | grep $bl
   ceph osd blacklist ls --format=json-pretty  | sed 's/\\\//\//' | grep $bl
   ceph osd dump --format=json-pretty | grep $bl
-  ceph osd dump | grep "^blacklist $bl"
+  ceph osd dump | grep $bl
   ceph osd blacklist rm $bl
   ceph osd blacklist ls | expect_false grep $bl
 
@@ -1411,7 +1399,7 @@ function test_mon_osd()
   ceph osd blacklist add $bl
   ceph osd blacklist ls | grep $bl
   ceph osd blacklist rm $bl
-  ceph osd blacklist ls | expect_false grep $expect_false bl
+  ceph osd blacklist ls | expect_false grep $bl
   expect_false "ceph osd blacklist $bl/-1"
   expect_false "ceph osd blacklist $bl/foo"
 
@@ -1460,21 +1448,37 @@ function test_mon_osd()
   ceph osd deep-scrub 0
   ceph osd repair 0
 
-  for f in noup nodown noin noout noscrub nodeep-scrub nobackfill norebalance norecover notieragent full
+  # pool scrub, force-recovery/backfill
+  pool_names=`rados lspools`
+  for pool_name in $pool_names
+  do
+    ceph osd pool scrub $pool_name
+    ceph osd pool deep-scrub $pool_name
+    ceph osd pool repair $pool_name
+    ceph osd pool force-recovery $pool_name
+    ceph osd pool cancel-force-recovery $pool_name
+    ceph osd pool force-backfill $pool_name
+    ceph osd pool cancel-force-backfill $pool_name
+  done
+
+  for f in noup nodown noin noout noscrub nodeep-scrub nobackfill \
+	  norebalance norecover notieragent full
   do
     ceph osd set $f
     ceph osd unset $f
   done
-  expect_false ceph osd unset sortbitwise  # cannot be unset
   expect_false ceph osd set bogus
   expect_false ceph osd unset bogus
+  for f in sortbitwise recover_deletes require_jewel_osds \
+	  require_kraken_osds
+  do
+	expect_false ceph osd set $f
+	expect_false ceph osd unset $f
+  done
   ceph osd require-osd-release nautilus
   # can't lower (or use new command for anything but jewel)
   expect_false ceph osd require-osd-release jewel
   # these are no-ops but should succeed.
-  ceph osd set require_jewel_osds
-  ceph osd set require_kraken_osds
-  expect_false ceph osd unset require_jewel_osds
 
   ceph osd set noup
   ceph osd down 0
@@ -1678,7 +1682,7 @@ function test_mon_osd()
   ceph osd perf
   ceph osd blocked-by
 
-  ceph osd stat | grep up,
+  ceph osd stat | grep up
 }
 
 function test_mon_crush()
@@ -1786,7 +1790,7 @@ function test_mon_osd_pool_quota()
   # get quotas
   #
   ceph osd pool get-quota tmp-quota-pool | grep 'max bytes.*10 B'
-  ceph osd pool get-quota tmp-quota-pool | grep 'max objects.*10 M objects'
+  ceph osd pool get-quota tmp-quota-pool | grep 'max objects.*10.*M objects'
   #
   # set valid quotas with unit prefix
   #
@@ -1961,6 +1965,7 @@ function test_mon_osd_pool_set()
   TEST_POOL_GETSET=pool_getset
   ceph osd pool create $TEST_POOL_GETSET 1
   ceph osd pool application enable $TEST_POOL_GETSET rados
+  ceph osd pool set $TEST_POOL_GETSET pg_autoscale_mode off
   wait_for_clean
   ceph osd pool get $TEST_POOL_GETSET all
 
@@ -1982,12 +1987,6 @@ function test_mon_osd_pool_set()
   check_response 'not change the size'
   set -e
   ceph osd pool get pool_erasure erasure_code_profile
-
-  auid=5555
-  ceph osd pool set $TEST_POOL_GETSET auid $auid
-  ceph osd pool get $TEST_POOL_GETSET auid | grep $auid
-  ceph --format=xml osd pool get $TEST_POOL_GETSET auid | grep $auid
-  ceph osd pool set $TEST_POOL_GETSET auid 0
 
   for flag in nodelete nopgchange nosizechange write_fadvise_dontneed noscrub nodeep-scrub; do
       ceph osd pool set $TEST_POOL_GETSET $flag false
@@ -2025,6 +2024,8 @@ function test_mon_osd_pool_set()
   ceph osd pool get $TEST_POOL_GETSET recovery_priority | grep 'recovery_priority: 5'
   ceph osd pool set $TEST_POOL_GETSET recovery_priority 0
   ceph osd pool get $TEST_POOL_GETSET recovery_priority | expect_false grep '.'
+  expect_false ceph osd pool set $TEST_POOL_GETSET recovery_priority -1
+  expect_false ceph osd pool set $TEST_POOL_GETSET recovery_priority 30
 
   ceph osd pool get $TEST_POOL_GETSET recovery_op_priority | expect_false grep '.'
   ceph osd pool set $TEST_POOL_GETSET recovery_op_priority 5 
@@ -2045,15 +2046,14 @@ function test_mon_osd_pool_set()
   ceph osd pool set $TEST_POOL_GETSET pg_num 10
   wait_for_clean
   ceph osd pool set $TEST_POOL_GETSET pgp_num 10
+  expect_false ceph osd pool set $TEST_POOL_GETSET pg_num 0
+  expect_false ceph osd pool set $TEST_POOL_GETSET pgp_num 0
 
   old_pgs=$(ceph osd pool get $TEST_POOL_GETSET pg_num | sed -e 's/pg_num: //')
   new_pgs=$(($old_pgs + $(ceph osd stat --format json | jq '.num_osds') * 32))
   ceph osd pool set $TEST_POOL_GETSET pg_num $new_pgs
   ceph osd pool set $TEST_POOL_GETSET pgp_num $new_pgs
   wait_for_clean
-  old_pgs=$(ceph osd pool get $TEST_POOL_GETSET pg_num | sed -e 's/pg_num: //')
-  new_pgs=$(($old_pgs + $(ceph osd stat --format json | jq '.num_osds') * 32 + 1))
-  expect_false ceph osd pool set $TEST_POOL_GETSET pg_num $new_pgs
 
   ceph osd pool set $TEST_POOL_GETSET nosizechange 1
   expect_false ceph osd pool set $TEST_POOL_GETSET size 2
@@ -2117,6 +2117,14 @@ function test_mon_osd_tiered_pool_set()
   # this is really a tier pool
   ceph osd pool create real-tier 2
   ceph osd tier add rbd real-tier
+
+  # expect us to be unable to set negative values for hit_set_*
+  for o in hit_set_period hit_set_count hit_set_fpp; do
+    expect_false ceph osd pool set real_tier $o -1
+  done
+
+  # and hit_set_fpp should be in range 0..1
+  expect_false ceph osd pool set real_tier hit_set_fpp 2
 
   ceph osd pool set real-tier hit_set_type explicit_hash
   ceph osd pool get real-tier hit_set_type | grep "hit_set_type: explicit_hash"
@@ -2417,13 +2425,13 @@ function test_mon_cephdf_commands()
   # to sync mon with osd
   flush_pg_stats
   local jq_filter='.pools | .[] | select(.name == "cephdf_for_test") | .stats'
-  cal_raw_used_size=`ceph df detail --format=json | jq "$jq_filter.raw_bytes_used"`
-  raw_used_size=`ceph df detail --format=json | jq "$jq_filter.bytes_used * 2"`
+  stored=`ceph df detail --format=json | jq "$jq_filter.stored * 2"`
+  stored_raw=`ceph df detail --format=json | jq "$jq_filter.stored_raw"`
 
   ceph osd pool delete cephdf_for_test cephdf_for_test --yes-i-really-really-mean-it
   rm ./cephdf_for_test
 
-  expect_false test $cal_raw_used_size != $raw_used_size
+  expect_false test $stored != $stored_raw
 }
 
 function test_mon_pool_application()

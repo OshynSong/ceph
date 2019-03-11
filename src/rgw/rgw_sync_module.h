@@ -1,3 +1,6 @@
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
+// vim: ts=8 sw=2 smarttab
+
 #ifndef CEPH_RGW_SYNC_MODULE_H
 #define CEPH_RGW_SYNC_MODULE_H
 
@@ -22,7 +25,10 @@ public:
     return nullptr;
   }
 
-  virtual RGWCoroutine *sync_object(RGWDataSyncEnv *sync_env, RGWBucketInfo& bucket_info, rgw_obj_key& key, uint64_t versioned_epoch, rgw_zone_set *zones_trace) = 0;
+  virtual RGWCoroutine *start_sync(RGWDataSyncEnv *sync_env) {
+    return nullptr;
+  }
+  virtual RGWCoroutine *sync_object(RGWDataSyncEnv *sync_env, RGWBucketInfo& bucket_info, rgw_obj_key& key, std::optional<uint64_t> versioned_epoch, rgw_zone_set *zones_trace) = 0;
   virtual RGWCoroutine *remove_object(RGWDataSyncEnv *sync_env, RGWBucketInfo& bucket_info, rgw_obj_key& key, real_time& mtime,
                                       bool versioned, uint64_t versioned_epoch, rgw_zone_set *zones_trace) = 0;
   virtual RGWCoroutine *create_delete_marker(RGWDataSyncEnv *sync_env, RGWBucketInfo& bucket_info, rgw_obj_key& key, real_time& mtime,
@@ -30,6 +36,7 @@ public:
 };
 
 class RGWRESTMgr;
+class RGWMetadataHandler;
 
 class RGWSyncModuleInstance {
 public:
@@ -39,6 +46,11 @@ public:
   virtual RGWRESTMgr *get_rest_filter(int dialect, RGWRESTMgr *orig) {
     return orig;
   }
+  virtual bool supports_user_writes() {
+    return false;
+  }
+  virtual RGWMetadataHandler *alloc_bucket_meta_handler();
+  virtual RGWMetadataHandler *alloc_bucket_instance_meta_handler();
 };
 
 typedef std::shared_ptr<RGWSyncModuleInstance> RGWSyncModuleInstanceRef;
@@ -51,6 +63,9 @@ public:
   RGWSyncModule() {}
   virtual ~RGWSyncModule() {}
 
+  virtual bool supports_writes() {
+    return false;
+  }
   virtual bool supports_data_export() = 0;
   virtual int create_instance(CephContext *cct, const JSONFormattable& config, RGWSyncModuleInstanceRef *instance) = 0;
 };

@@ -14,6 +14,7 @@
 
 #include "CephxProtocol.h"
 #include "common/Clock.h"
+#include "common/ceph_context.h"
 #include "common/config.h"
 #include "common/debug.h"
 #include "include/buffer.h"
@@ -55,9 +56,12 @@ bool cephx_build_service_ticket_blob(CephContext *cct, CephXSessionAuthInfo& inf
   ticket_info.ticket = info.ticket;
   ticket_info.ticket.caps = info.ticket.caps;
 
-  ldout(cct, 10) << "build_service_ticket service " << ceph_entity_type_name(info.service_id)
-	   << " secret_id " << info.secret_id
-	   << " ticket_info.ticket.name=" << ticket_info.ticket.name.to_str() << dendl;
+  ldout(cct, 10) << "build_service_ticket service "
+		 << ceph_entity_type_name(info.service_id)
+		 << " secret_id " << info.secret_id
+		 << " ticket_info.ticket.name="
+		 << ticket_info.ticket.name.to_str()
+		 << " ticket.global_id " << info.ticket.global_id << dendl;
   blob.secret_id = info.secret_id;
   std::string error;
   if (!info.service_secret.get_secret().length())
@@ -141,8 +145,9 @@ bool cephx_build_service_ticket_reply(CephContext *cct,
  * PRINCIPAL: verify our attempt to authenticate succeeded.  fill out
  * this ServiceTicket with the result.
  */
-bool CephXTicketHandler::verify_service_ticket_reply(CryptoKey& secret,
-						     bufferlist::const_iterator& indata)
+bool CephXTicketHandler::verify_service_ticket_reply(
+  CryptoKey& secret,
+  bufferlist::const_iterator& indata)
 {
   __u8 service_ticket_v;
   decode(service_ticket_v, indata);
@@ -281,9 +286,6 @@ bool CephXTicketManager::verify_service_ticket_reply(CryptoKey& secret,
     handler.service_id = type;
   }
 
-  if (!indata.end())
-    return false;
-
   return true;
 }
 
@@ -298,7 +300,7 @@ CephXAuthorizer *CephXTicketHandler::build_authorizer(uint64_t global_id) const
   a->session_key = session_key;
   cct->random()->get_bytes((char*)&a->nonce, sizeof(a->nonce));
 
-  __u8 authorizer_v = 1;
+  __u8 authorizer_v = 1; // see AUTH_MODE_* in Auth.h
   encode(authorizer_v, a->bl);
   encode(global_id, a->bl);
   encode(service_id, a->bl);
@@ -391,9 +393,11 @@ bool cephx_decode_ticket(CephContext *cct, KeyStore *keys, uint32_t service_id,
  */
 bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
 			     bufferlist::const_iterator& indata,
+			     size_t connection_secret_required_len,
 			     CephXServiceTicketInfo& ticket_info,
 			     std::unique_ptr<AuthAuthorizerChallenge> *challenge,
-			     bufferlist& reply_bl)
+			     std::string *connection_secret,
+			     bufferlist *reply_bl)
 {
   __u8 authorizer_v;
   uint32_t service_id;
@@ -401,7 +405,6 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
   CryptoKey service_secret;
   // ticket blob
   CephXTicketBlob ticket;
-
 
   try {
     decode(authorizer_v, indata);
@@ -429,7 +432,7 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
       ldout(cct, 0) << "verify_authorizer could not get service secret for service "
 	      << ceph_entity_type_name(service_id) << " secret_id=" << ticket.secret_id << dendl;
       if (cct->_conf->auth_debug && ticket.secret_id == 0)
-	assert(0 == "got secret_id=0");
+	ceph_abort_msg("got secret_id=0");
       return false;
     }
   }
@@ -469,7 +472,7 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
       ldout(cct,10) << __func__ << " adding server_challenge " << c->server_challenge
 		    << dendl;
 
-      encode_encrypt_enc_bl(cct, *c, ticket_info.session_key, reply_bl, error);
+      encode_encrypt_enc_bl(cct, *c, ticket_info.session_key, *reply_bl, error);
       if (!error.empty()) {
 	ldout(cct, 10) << "verify_authorizer: encode_encrypt error: " << error << dendl;
 	return false;
@@ -491,17 +494,29 @@ bool cephx_verify_authorizer(CephContext *cct, KeyStore *keys,
   CephXAuthorizeReply reply;
   // reply.trans_id = auth_msg.trans_id;
   reply.nonce_plus_one = auth_msg.nonce + 1;
-  if (encode_encrypt(cct, reply, ticket_info.session_key, reply_bl, error)) {
+#ifndef WITH_SEASTAR
+  if (connection_secret) {
+    // generate a connection secret
+    connection_secret->resize(connection_secret_required_len);
+    if (connection_secret_required_len) {
+      cct->random()->get_bytes(connection_secret->data(),
+			       connection_secret_required_len);
+    }
+    reply.connection_secret = *connection_secret;
+  }
+#endif
+  if (encode_encrypt(cct, reply, ticket_info.session_key, *reply_bl, error)) {
     ldout(cct, 10) << "verify_authorizer: encode_encrypt error: " << error << dendl;
     return false;
   }
 
   ldout(cct, 10) << "verify_authorizer ok nonce " << hex << auth_msg.nonce << dec
-	   << " reply_bl.length()=" << reply_bl.length() <<  dendl;
+	   << " reply_bl.length()=" << reply_bl->length() <<  dendl;
   return true;
 }
 
-bool CephXAuthorizer::verify_reply(bufferlist::const_iterator& indata)
+bool CephXAuthorizer::verify_reply(bufferlist::const_iterator& indata,
+				   std::string *connection_secret)
 {
   CephXAuthorizeReply reply;
 
@@ -517,10 +532,16 @@ bool CephXAuthorizer::verify_reply(bufferlist::const_iterator& indata)
 	    << " sent " << nonce << dendl;
     return false;
   }
+
+  if (connection_secret &&
+      reply.connection_secret.size()) {
+    *connection_secret = reply.connection_secret;
+  }
   return true;
 }
 
-bool CephXAuthorizer::add_challenge(CephContext *cct, bufferlist& challenge)
+bool CephXAuthorizer::add_challenge(CephContext *cct,
+				    const bufferlist& challenge)
 {
   bl = base_bl;
 

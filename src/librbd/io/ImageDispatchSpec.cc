@@ -28,7 +28,7 @@ struct ImageDispatchSpec<I>::SendVisitor
   void operator()(Discard& discard) const {
     ImageRequest<I>::aio_discard(
       &spec->m_image_ctx, spec->m_aio_comp, std::move(spec->m_image_extents),
-      discard.skip_partial_discard, spec->m_parent_trace);
+      discard.discard_granularity_bytes, spec->m_parent_trace);
   }
 
   void operator()(Write& write) const {
@@ -92,7 +92,6 @@ struct ImageDispatchSpec<I>::TokenRequestedVisitor
     return 1;
   }
 
-  template <typename T>
   uint64_t operator()(const Flush&) const {
     return 0;
   }
@@ -134,7 +133,7 @@ uint64_t ImageDispatchSpec<I>::extents_length() {
 
 template <typename I>
 bool ImageDispatchSpec<I>::is_write_op() const {
-  return boost::apply_visitor(IsWriteOpVisitor{}, m_request);
+  return boost::apply_visitor(IsWriteOpVisitor(), m_request);
 }
 
 template <typename I>

@@ -22,15 +22,17 @@
 /*
  * A message with no (remote) effect.
  */
-class MNop : public Message {
+class MNop : public MessageInstance<MNop> {
 public:
-  static const int HEAD_VERSION = 1;
-  static const int COMPAT_VERSION = 1;
+  friend factory;
+
+  static constexpr int HEAD_VERSION = 1;
+  static constexpr int COMPAT_VERSION = 1;
 
   __u32 tag; // ignored tag value
 
   MNop()
-    : Message(MSG_NOP, HEAD_VERSION, COMPAT_VERSION)
+    : MessageInstance(MSG_NOP, HEAD_VERSION, COMPAT_VERSION)
     {}
 
   ~MNop() {}
@@ -45,7 +47,7 @@ public:
     decode(tag, p);
   }
 
-  const char *get_type_name() const { return "MNop"; }
+  std::string_view get_type_name() const { return "MNop"; }
 
   void print(ostream& out) const {
     out << get_type_name() << " ";

@@ -3,6 +3,7 @@ import datetime
 import errno
 import json
 import six
+from collections import defaultdict
 
 
 DATEFMT = '%Y-%m-%d %H:%M:%S.%f'
@@ -37,6 +38,22 @@ class Module(MgrModule):
         timestr = timestr.rstrip('Z')
         return datetime.datetime.strptime(timestr, DATEFMT)
 
+    def timestamp_filter(self, f):
+        """
+        Filter crash reports by timestamp.
+
+        :param f: f(time) return true to keep crash report
+        :returns: crash reports for which f(time) returns true
+        """
+        def inner(pair):
+            _, meta = pair
+            meta = json.loads(meta)
+            time = self.time_from_string(meta["timestamp"])
+            return f(time)
+        matches = filter(inner, six.iteritems(
+            self.get_store_prefix("crash/")))
+        return [(k, json.loads(m)) for k, m in matches]
+
     # command handlers
 
     def do_info(self, cmd, inbuf):
@@ -62,8 +79,12 @@ class Module(MgrModule):
 
     def do_ls(self, cmd, inbuf):
         keys = []
-        for key in self.get_store_prefix('crash/').iterkeys():
-            keys.append(key.replace('crash/', ''))
+        for k, meta in self.timestamp_filter(lambda ts: True):
+            process_name = meta.get('process_name', 'unknown')
+            if not process_name:
+                process_name = 'unknown'
+            keys.append("%s %s" % (k.replace('crash/', ''), process_name))
+        keys.sort()
         return 0, '\n'.join(keys), ''
 
     def do_rm(self, cmd, inbuf):
@@ -81,13 +102,10 @@ class Module(MgrModule):
         except ValueError:
             return errno.EINVAL, '', 'keep argument must be integer'
 
-        keeptime = datetime.timedelta(days=keep)
+        cutoff = now - datetime.timedelta(days=keep)
 
-        for key, meta in six.iteritems(self.get_store_prefix('crash/')):
-            meta = json.loads(meta)
-            stamp = self.time_from_string(meta['timestamp'])
-            if stamp <= now - keeptime:
-                self.set_store(key, None)
+        for key, _ in self.timestamp_filter(lambda ts: ts <= cutoff):
+            self.set_store(key, None)
 
         return 0, '', ''
 
@@ -134,14 +152,31 @@ class Module(MgrModule):
             retlines.append(binstr(bindict))
         return 0, '\n'.join(retlines), ''
 
-    def do_self_test(self, cmd, inbuf):
+    def do_json_report(self, cmd, inbuf):
+        """
+        Return a machine readable summary of recent crashes.
+        """
+        try:
+            hours = int(cmd['hours'])
+        except ValueError:
+            return errno.EINVAL, '', '<hours> argument must be integer'
+
+        report = defaultdict(lambda: 0)
+        cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=hours)
+        for _, meta in self.timestamp_filter(lambda ts: ts >= cutoff):
+            pname = meta.get("process_name", "unknown")
+            if not pname:
+                pname = "unknown"
+            report[pname] += 1
+
+        return 0, '', json.dumps(report)
+
+    def self_test(self):
         # test time conversion
         timestr = '2018-06-22 20:35:38.058818Z'
         dt = self.time_from_string(timestr)
         if dt != datetime.datetime(2018, 6, 22, 20, 35, 38, 58818):
-            return errno.EINVAL, '', 'time_from_string() failed'
-
-        return 0, '', 'self-test succeeded'
+            raise RuntimeError('time_from_string() failed')
 
     COMMANDS = [
         {
@@ -175,15 +210,15 @@ class Module(MgrModule):
             'handler': do_rm,
         },
         {
-            'cmd': 'crash self-test',
-            'desc': 'Run a self test of the crash module',
-            'perm': 'r',
-            'handler': do_self_test,
-        },
-        {
             'cmd': 'crash stat',
             'desc': 'Summarize recorded crashes',
             'perm': 'r',
             'handler': do_stat,
+        },
+        {
+            'cmd': 'crash json_report name=hours,type=CephString',
+            'desc': 'Crashes in the last <hours> hours',
+            'perm': 'r',
+            'handler': do_json_report,
         },
     ]

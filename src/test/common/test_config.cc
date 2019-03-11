@@ -19,21 +19,21 @@
  *
  *
  */
-#include "common/config.h"
+#include "common/config_proxy.h"
 #include "common/errno.h"
 #include "gtest/gtest.h"
+#include "common/hostname.h"
 
 extern std::string exec(const char* cmd); // defined in test_hostname.cc
 
-class test_md_config_t : public md_config_t, public ::testing::Test {
+class test_config_proxy : public ConfigProxy, public ::testing::Test {
 public:
 
-  test_md_config_t()
-    : md_config_t(true), Test()
+  test_config_proxy()
+    : ConfigProxy{true}, Test()
   {}
 
   void test_expand_meta() {
-    auto locker = lock();
     // successfull meta expansion $run_dir and ${run_dir}
     {
       ostringstream oss;
@@ -61,7 +61,7 @@ public:
       std::string after = " AFTER ";
       std::string val(before + "$host${host}" + after);
       early_expand_meta(val, &oss);
-      std::string hostname = exec("hostname -s");
+      std::string hostname = ceph_get_short_hostname();
       EXPECT_EQ(before + hostname + hostname + after, val);
       EXPECT_EQ("", oss.str());
     }
@@ -126,7 +126,7 @@ public:
   }
 };
 
-TEST_F(test_md_config_t, expand_meta)
+TEST_F(test_config_proxy, expand_meta)
 {
   test_expand_meta();
 }
@@ -134,7 +134,7 @@ TEST_F(test_md_config_t, expand_meta)
 TEST(md_config_t, set_val)
 {
   int buf_size = 1024;
-  md_config_t conf;
+  ConfigProxy conf{false};
   {
     char *run_dir = (char*)malloc(buf_size);
     EXPECT_EQ(0, conf.get_val("run_dir", &run_dir, buf_size));
@@ -159,13 +159,83 @@ TEST(md_config_t, set_val)
     const string s{"1 days 2 hours 4 minutes"};
     using days_t = duration<int, std::ratio<3600 * 24>>;
     auto expected = (duration_cast<seconds>(days_t{1}) +
-		     duration_cast<seconds>(hours{2}) +
-		     duration_cast<seconds>(minutes{4}));
+                    duration_cast<seconds>(hours{2}) +
+                    duration_cast<seconds>(minutes{4}));
     EXPECT_EQ(0, conf.set_val("mgr_tick_period",
-			      "1 days 2 hours 4 minutes", nullptr));
+                             "1 days 2 hours 4 minutes", nullptr));
     EXPECT_EQ(expected.count(), conf.get_val<seconds>("mgr_tick_period").count());
     EXPECT_EQ(-EINVAL, conf.set_val("mgr_tick_period", "21 centuries", nullptr));
     EXPECT_EQ(expected.count(), conf.get_val<seconds>("mgr_tick_period").count());
+  }
+
+  using namespace std::chrono;
+
+  using days_t = duration<int, std::ratio<3600 * 24>>;
+
+  struct testcase {
+    std::string s;
+    std::chrono::seconds r;
+  };
+  std::vector<testcase> good = {
+    { "23"s, duration_cast<seconds>(seconds{23}) },
+    { " 23 "s, duration_cast<seconds>(seconds{23}) },
+    { " 23s "s, duration_cast<seconds>(seconds{23}) },
+    { " 23 s "s, duration_cast<seconds>(seconds{23}) },
+    { " 23 sec "s, duration_cast<seconds>(seconds{23}) },
+    { "23 second "s, duration_cast<seconds>(seconds{23}) },
+    { "23 seconds"s, duration_cast<seconds>(seconds{23}) },
+    { "2m5s"s,  duration_cast<seconds>(seconds{2*60+5}) },
+    { "2 m 5 s "s,  duration_cast<seconds>(seconds{2*60+5}) },
+    { "2 m5"s,  duration_cast<seconds>(seconds{2*60+5}) },
+    { "2 min5"s,  duration_cast<seconds>(seconds{2*60+5}) },
+    { "2 minutes  5"s,  duration_cast<seconds>(seconds{2*60+5}) },
+    { "1w"s, duration_cast<seconds>(seconds{3600*24*7}) },
+    { "1wk"s, duration_cast<seconds>(seconds{3600*24*7}) },
+    { "1week"s, duration_cast<seconds>(seconds{3600*24*7}) },
+    { "1weeks"s, duration_cast<seconds>(seconds{3600*24*7}) },
+    { "1month"s, duration_cast<seconds>(seconds{3600*24*30}) },
+    { "1months"s, duration_cast<seconds>(seconds{3600*24*30}) },
+    { "1mo"s, duration_cast<seconds>(seconds{3600*24*30}) },
+    { "1y"s, duration_cast<seconds>(seconds{3600*24*365}) },
+    { "1yr"s, duration_cast<seconds>(seconds{3600*24*365}) },
+    { "1year"s, duration_cast<seconds>(seconds{3600*24*365}) },
+    { "1years"s, duration_cast<seconds>(seconds{3600*24*365}) },
+    { "1d2h3m4s"s,
+      duration_cast<seconds>(days_t{1}) +
+      duration_cast<seconds>(hours{2}) +
+      duration_cast<seconds>(minutes{3}) +
+      duration_cast<seconds>(seconds{4}) },
+    { "1 days 2 hours 4 minutes"s,
+      duration_cast<seconds>(days_t{1}) +
+      duration_cast<seconds>(hours{2}) +
+      duration_cast<seconds>(minutes{4}) },
+  };
+
+  for (auto& i : good) {
+    cout << "good: " << i.s << " -> " << i.r.count() << std::endl;
+    EXPECT_EQ(0, conf.set_val("mgr_tick_period", i.s, nullptr));
+    EXPECT_EQ(i.r.count(), conf.get_val<seconds>("mgr_tick_period").count());
+  }
+
+  std::vector<std::string> bad = {
+    "12x",
+    "_ 12",
+    "1 2",
+    "21 centuries",
+    "1 y m",
+  };
+  for (auto& i : bad) {
+    std::stringstream err;
+    EXPECT_EQ(-EINVAL, conf.set_val("mgr_tick_period", i, &err));
+    cout << "bad: " << i << " -> " << err.str() << std::endl;
+  }
+
+  for (int i = 0; i < 100; ++i) {
+    std::chrono::seconds j = std::chrono::seconds(rand());
+    string s = exact_timespan_str(j);
+    std::chrono::seconds k = parse_timespan(s);
+    cout << "rt: " << j.count() << " -> " << s << " -> " << k.count() << std::endl;
+    EXPECT_EQ(j.count(), k.count());
   }
 }
 

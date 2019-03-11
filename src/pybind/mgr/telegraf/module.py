@@ -8,7 +8,7 @@ from threading import Event
 
 from telegraf.basesocket import BaseSocket
 from telegraf.protocol import Line
-from mgr_module import MgrModule
+from mgr_module import MgrModule, PG_STATES
 
 try:
     from urllib.parse import urlparse
@@ -34,20 +34,16 @@ class Module(MgrModule):
             "desc": "Force sending data to Telegraf",
             "perm": "rw"
         },
-        {
-            "cmd": "telegraf self-test",
-            "desc": "debug the module",
-            "perm": "rw"
-        },
     ]
 
-    OPTIONS = [
+    MODULE_OPTIONS = [
         {
             'name': 'address',
             'default': 'unixgram:///tmp/telegraf.sock',
         },
         {
             'name': 'interval',
+            'type': 'secs',
             'default': 15
         }
     ]
@@ -56,7 +52,7 @@ class Module(MgrModule):
 
     @property
     def config_keys(self):
-        return dict((o['name'], o.get('default', None)) for o in self.OPTIONS)
+        return dict((o['name'], o.get('default', None)) for o in self.MODULE_OPTIONS)
 
     def __init__(self, *args, **kwargs):
         super(Module, self).__init__(*args, **kwargs)
@@ -80,7 +76,7 @@ class Module(MgrModule):
             'dirty',
             'rd',
             'rd_bytes',
-            'raw_bytes_used',
+            'stored_raw',
             'wr',
             'wr_bytes',
             'objects',
@@ -106,6 +102,8 @@ class Module(MgrModule):
         for daemon, counters in six.iteritems(self.get_all_perf_counters()):
             svc_type, svc_id = daemon.split('.', 1)
             metadata = self.get_metadata(svc_type, svc_id)
+            if not metadata:
+                continue
 
             for path, counter_info in counters.items():
                 if counter_info['type'] & self.PERFCOUNTER_HISTOGRAM:
@@ -130,18 +128,13 @@ class Module(MgrModule):
                     'num_pgs', 'num_objects', 'num_pools']:
             stats[key] = pg_status[key]
 
-        pg_states = ['active', 'peering', 'clean', 'scrubbing', 'undersized',
-                     'backfilling', 'recovering', 'degraded', 'inconsistent',
-                     'remapped', 'backfill_toofull', 'wait_backfill',
-                     'recovery_wait']
-
-        for state in pg_states:
+        for state in PG_STATES:
             stats['num_pgs_{0}'.format(state)] = 0
 
         stats['num_pgs'] = pg_status['num_pgs']
         for state in pg_status['pgs_by_state']:
             states = state['state_name'].split('+')
-            for s in pg_states:
+            for s in PG_STATES:
                 key = 'num_pgs_{0}'.format(s)
                 if s in states:
                     stats[key] += state['count']
@@ -226,9 +219,9 @@ class Module(MgrModule):
 
     def init_module_config(self):
         self.config['address'] = \
-            self.get_config("address", default=self.config_keys['address'])
+            self.get_module_option("address", default=self.config_keys['address'])
         self.config['interval'] = \
-            int(self.get_config("interval",
+            int(self.get_module_option("interval",
                                 default=self.config_keys['interval']))
 
     def now(self):
@@ -275,14 +268,11 @@ class Module(MgrModule):
 
             self.log.debug('Setting configuration option %s to %s', key, value)
             self.set_config_option(key, value)
-            self.set_config(key, value)
+            self.set_module_option(key, value)
             return 0, 'Configuration option {0} updated'.format(key), ''
         elif cmd['prefix'] == 'telegraf send':
             self.send_to_telegraf()
             return 0, 'Sending data to Telegraf', ''
-        if cmd['prefix'] == 'telegraf self-test':
-            self.self_test()
-            return 0, '', 'Self-test OK'
 
         return (-errno.EINVAL, '',
                 "Command not found '{0}'".format(cmd['prefix']))

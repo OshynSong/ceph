@@ -12,8 +12,6 @@ function get_cmake_variable() {
 }
 
 function get_python_path() {
-    local ceph_lib=$1
-    shift
     local py_ver=$(get_cmake_variable MGR_PYTHON_VERSION | cut -d '.' -f1)
     if [ -z "${py_ver}" ]; then
         if [ $(get_cmake_variable WITH_PYTHON2) = ON ]; then
@@ -22,7 +20,7 @@ function get_python_path() {
             py_ver=3
         fi
     fi
-    echo $(realpath ../src/pybind):$ceph_lib/cython_modules/lib.$py_ver
+    echo $(realpath ../src/pybind):$(pwd)/lib/cython_modules/lib.$py_ver
 }
 
 if [ `uname` = FreeBSD ]; then
@@ -40,7 +38,7 @@ fi
 
 function cleanup() {
     if [ -n "$precore" ]; then
-        sudo sysctl -w ${KERNCORE}=${precore}
+        sudo sysctl -w "${KERNCORE}=${precore}"
     fi
 }
 
@@ -56,6 +54,8 @@ PATH=$(pwd)/bin:$PATH
 # add /sbin and /usr/sbin to PATH to find sysctl in those cases where the
 # user's PATH does not get these directories by default (e.g., tumbleweed)
 PATH=$PATH:/sbin:/usr/sbin
+
+export LD_LIBRARY_PATH="$(pwd)/lib"
 
 # TODO: Use getops
 dryrun=false
@@ -77,16 +77,11 @@ count=0
 errors=0
 userargs=""
 precore="$(sysctl -n $KERNCORE)"
-
-if [[ "${precore:0:1}" = "|" ]]; then
-  precore="${precore:1}"
-fi
-
 # If corepattern already set, avoid having to use sudo
 if [ "$precore" = "$COREPATTERN" ]; then
     precore=""
 else
-    sudo sysctl -w ${KERNCORE}=${COREPATTERN}
+    sudo sysctl -w "${KERNCORE}=${COREPATTERN}"
 fi
 # Clean out any cores in core target directory (currently .)
 if ls $(dirname $(sysctl -n $KERNCORE)) | grep -q '^core\|core$' ; then
@@ -109,12 +104,12 @@ do
         found=false
         for c in "${!select[@]}"
         do
-            # Get command and any arguments of subset of tests ro tun
+            # Get command and any arguments of subset of tests to run
             allargs="${select[$c]}"
             arg1=$(echo "$allargs" | cut --delimiter " " --field 1)
             # Get user args for this selection for use below
             userargs="$(echo $allargs | cut -s --delimiter " " --field 2-)"
-            if [[ "$arg1" = $(basename $f) ]]; then
+            if [[ "$arg1" = $(basename $f) ]] || [[  "$arg1" = $(dirname $f) ]]; then
                 found=true
                 break
             fi

@@ -42,10 +42,10 @@ CURRENT_PATH=`pwd`
 # for rocksdb
 case $(lsb_release -si) in
 	Ubuntu|Debian|Devuan)
-		install g++ libsnappy-dev zlib1g-dev libbz2-dev librados-dev
+		install g++ libsnappy-dev zlib1g-dev libbz2-dev libradospp-dev
 		;;
 	CentOS|Fedora|RedHatEnterpriseServer)
-		install gcc-c++.x86_64 snappy-devel zlib zlib-devel bzip2 bzip2-devel librados2-devel.x86_64
+		install gcc-c++.x86_64 snappy-devel zlib zlib-devel bzip2 bzip2-devel libradospp-devel.x86_64
 		;;
 	*)
         echo "$(lsb_release -si) is unknown, $@ will have to be installed manually."

@@ -40,8 +40,9 @@ public:
                         Extents &&image_extents, bufferlist &&bl, int op_flags,
 			const ZTracer::Trace &parent_trace);
   static void aio_discard(ImageCtxT *ictx, AioCompletion *c,
-                          Extents &&image_extents, bool skip_partial_discard,
-			  const ZTracer::Trace &parent_trace);
+                          Extents &&image_extents,
+                          uint32_t discard_granularity_bytes,
+                          const ZTracer::Trace &parent_trace);
   static void aio_flush(ImageCtxT *ictx, AioCompletion *c,
                         FlushSource flush_source,
                         const ZTracer::Trace &parent_trace);
@@ -84,6 +85,7 @@ protected:
 
 
   virtual int clip_request();
+  virtual void update_timestamp();
   virtual void send_request() = 0;
   virtual void send_image_cache_request() = 0;
 
@@ -139,8 +141,7 @@ protected:
 
   void send_request() override;
 
-  virtual int validate_object_extents(
-      const ObjectExtents &object_extents) const {
+  virtual int prune_object_extents(ObjectExtents* object_extents) const {
     return 0;
   }
 
@@ -202,11 +203,12 @@ template <typename ImageCtxT = ImageCtx>
 class ImageDiscardRequest : public AbstractImageWriteRequest<ImageCtxT> {
 public:
   ImageDiscardRequest(ImageCtxT &image_ctx, AioCompletion *aio_comp,
-                      Extents&& image_extents, bool skip_partial_discard,
-		      const ZTracer::Trace &parent_trace)
+                      Extents&& image_extents,
+		      uint32_t discard_granularity_bytes,
+                      const ZTracer::Trace &parent_trace)
     : AbstractImageWriteRequest<ImageCtxT>(
 	image_ctx, aio_comp, std::move(image_extents), "discard", parent_trace),
-      m_skip_partial_discard(skip_partial_discard) {
+      m_discard_granularity_bytes(discard_granularity_bytes) {
   }
 
 protected:
@@ -228,8 +230,11 @@ protected:
 
   uint64_t append_journal_event(bool synchronous) override;
   void update_stats(size_t length) override;
+
+  int prune_object_extents(ObjectExtents* object_extents) const override;
+
 private:
-  bool m_skip_partial_discard;
+  uint32_t m_discard_granularity_bytes;
 };
 
 template <typename ImageCtxT = ImageCtx>
@@ -247,6 +252,8 @@ protected:
 
   int clip_request() override {
     return 0;
+  }
+  void update_timestamp() override {
   }
   void send_request() override;
   void send_image_cache_request() override;
@@ -334,8 +341,7 @@ protected:
     return "aio_compare_and_write";
   }
 
-  int validate_object_extents(
-      const ObjectExtents &object_extents) const override;
+  int prune_object_extents(ObjectExtents* object_extents) const override;
 
 private:
   bufferlist m_cmp_bl;

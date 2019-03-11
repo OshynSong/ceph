@@ -20,25 +20,27 @@
 #include "msg/Message.h"
 #include "MCommand.h"
 
-class MCommandReply : public Message {
- public:
+class MCommandReply : public MessageInstance<MCommandReply> {
+public:
+  friend factory;
+
   errorcode32_t r;
   string rs;
   
   MCommandReply()
-    : Message(MSG_COMMAND_REPLY) {}
+    : MessageInstance(MSG_COMMAND_REPLY) {}
   MCommandReply(MCommand *m, int _r)
-    : Message(MSG_COMMAND_REPLY), r(_r) {
+    : MessageInstance(MSG_COMMAND_REPLY), r(_r) {
     header.tid = m->get_tid();
   }
   MCommandReply(int _r, std::string_view s)
-    : Message(MSG_COMMAND_REPLY),
+    : MessageInstance(MSG_COMMAND_REPLY),
       r(_r), rs(s) { }
 private:
   ~MCommandReply() override {}
 
 public:
-  const char *get_type_name() const override { return "command_reply"; }
+  std::string_view get_type_name() const override { return "command_reply"; }
   void print(ostream& o) const override {
     o << "command_reply(tid " << get_tid() << ": " << r << " " << rs << ")";
   }

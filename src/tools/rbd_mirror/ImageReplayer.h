@@ -16,7 +16,7 @@
 #include "librbd/journal/Types.h"
 #include "librbd/journal/TypeTraits.h"
 #include "ProgressContext.h"
-#include "types.h"
+#include "tools/rbd_mirror/Types.h"
 #include "tools/rbd_mirror/image_replayer/Types.h"
 
 #include <boost/noncopyable.hpp>
@@ -29,6 +29,7 @@
 #include <vector>
 
 class AdminSocketHook;
+class PerfCounters;
 
 namespace journal {
 
@@ -198,6 +199,7 @@ protected:
 
   virtual void on_start_fail(int r, const std::string &desc);
   virtual bool on_start_interrupted();
+  virtual bool on_start_interrupted(Mutex& lock);
 
   virtual void on_stop_journal_replay(int r = 0, const std::string &desc = "");
 
@@ -318,6 +320,7 @@ private:
   bool m_manual_stop = false;
 
   AdminSocketHook *m_asok_hook = nullptr;
+  PerfCounters *m_perf_counters = nullptr;
 
   image_replayer::BootstrapRequest<ImageCtxT> *m_bootstrap_request = nullptr;
 
@@ -330,6 +333,7 @@ private:
   librbd::journal::MirrorPeerClientMeta m_client_meta;
 
   ReplayEntry m_replay_entry;
+  utime_t m_replay_start_time;
   bool m_replay_tag_valid = false;
   uint64_t m_replay_tag_tid = 0;
   cls::journal::Tag m_replay_tag;
@@ -349,13 +353,16 @@ private:
   struct C_ReplayCommitted : public Context {
     ImageReplayer *replayer;
     ReplayEntry replay_entry;
+    utime_t replay_start_time;
 
     C_ReplayCommitted(ImageReplayer *replayer,
-                      ReplayEntry &&replay_entry)
-      : replayer(replayer), replay_entry(std::move(replay_entry)) {
+                      ReplayEntry &&replay_entry,
+                      const utime_t &replay_start_time)
+      : replayer(replayer), replay_entry(std::move(replay_entry)),
+        replay_start_time(replay_start_time) {
     }
     void finish(int r) override {
-      replayer->handle_process_entry_safe(replay_entry, r);
+      replayer->handle_process_entry_safe(replay_entry, replay_start_time, r);
     }
   };
 
@@ -414,7 +421,8 @@ private:
 
   void process_entry();
   void handle_process_entry_ready(int r);
-  void handle_process_entry_safe(const ReplayEntry& replay_entry, int r);
+  void handle_process_entry_safe(const ReplayEntry& replay_entry,
+                                 const utime_t &m_replay_start_time, int r);
 
   void register_admin_socket_hook();
   void unregister_admin_socket_hook();

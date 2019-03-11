@@ -15,14 +15,17 @@
 #include <sstream>
 #include <limits>
 
+#include <fcntl.h>
+
 #include "Crypto.h"
 #ifdef USE_OPENSSL
 # include <openssl/aes.h>
 #endif
 
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 #include "common/Clock.h"
 #include "common/armor.h"
+#include "common/ceph_context.h"
 #include "common/ceph_crypto.h"
 #include "common/hex.h"
 #include "common/safe_io.h"
@@ -53,7 +56,7 @@ void CryptoRandom::get_bytes(char *buf, int len)
 
 // open /dev/urandom once on construction and reuse the fd for all reads
 CryptoRandom::CryptoRandom()
-  : fd(TEMP_FAILURE_RETRY(::open("/dev/urandom", O_RDONLY)))
+  : fd(TEMP_FAILURE_RETRY(::open("/dev/urandom", O_CLOEXEC|O_RDONLY)))
 {
   if (fd < 0) {
     throw std::system_error(errno, std::system_category());
@@ -231,7 +234,7 @@ public:
     //   16 + p2align(10, 16) -> 16
     //   16 + p2align(16, 16) -> 32 including 16 bytes for padding.
     ceph::bufferptr out_tmp{static_cast<unsigned>(
-      AES_BLOCK_LEN + p2align(in.length(), AES_BLOCK_LEN))};
+      AES_BLOCK_LEN + p2align<std::size_t>(in.length(), AES_BLOCK_LEN))};
 
     // let's pad the data
     std::uint8_t pad_len = out_tmp.length() - in.length();
@@ -298,9 +301,7 @@ public:
     if (out.buf == nullptr) {
       // 16 + p2align(10, 16) -> 16
       // 16 + p2align(16, 16) -> 32
-      const std::size_t needed = \
-        AES_BLOCK_LEN + p2align(in.length, AES_BLOCK_LEN);
-      return needed;
+      return AES_BLOCK_LEN + p2align<std::size_t>(in.length, AES_BLOCK_LEN);
     }
 
     // how many bytes of in.buf hang outside the alignment boundary and how

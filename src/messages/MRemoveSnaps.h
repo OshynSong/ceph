@@ -17,20 +17,23 @@
 
 #include "messages/PaxosServiceMessage.h"
 
-struct MRemoveSnaps : public PaxosServiceMessage {
+class MRemoveSnaps : public MessageInstance<MRemoveSnaps, PaxosServiceMessage> {
+public:
+  friend factory;
+
   map<int, vector<snapid_t> > snaps;
   
+protected:
   MRemoveSnaps() : 
-    PaxosServiceMessage(MSG_REMOVE_SNAPS, 0) { }
+    MessageInstance(MSG_REMOVE_SNAPS, 0) { }
   MRemoveSnaps(map<int, vector<snapid_t> >& s) : 
-    PaxosServiceMessage(MSG_REMOVE_SNAPS, 0) {
+    MessageInstance(MSG_REMOVE_SNAPS, 0) {
     snaps.swap(s);
   }
-private:
   ~MRemoveSnaps() override {}
 
 public:
-  const char *get_type_name() const override { return "remove_snaps"; }
+  std::string_view get_type_name() const override { return "remove_snaps"; }
   void print(ostream& out) const override {
     out << "remove_snaps(" << snaps << " v" << version << ")";
   }
@@ -44,7 +47,7 @@ public:
     auto p = payload.cbegin();
     paxos_decode(p);
     decode(snaps, p);
-    assert(p.end());
+    ceph_assert(p.end());
   }
 
 };

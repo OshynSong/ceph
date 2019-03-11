@@ -1,7 +1,11 @@
 import { Component, OnInit, TemplateRef, ViewChild } from '@angular/core';
 
+import { I18n } from '@ngx-translate/i18n-polyfill';
+
 import { HostService } from '../../../shared/api/host.service';
 import { CdTableColumn } from '../../../shared/models/cd-table-column';
+import { CdTableFetchDataContext } from '../../../shared/models/cd-table-fetch-data-context';
+import { CdTableSelection } from '../../../shared/models/cd-table-selection';
 import { Permissions } from '../../../shared/models/permissions';
 import { CephShortVersionPipe } from '../../../shared/pipes/ceph-short-version.pipe';
 import { AuthStorageService } from '../../../shared/services/auth-storage.service';
@@ -16,13 +20,17 @@ export class HostsComponent implements OnInit {
   columns: Array<CdTableColumn> = [];
   hosts: Array<object> = [];
   isLoadingHosts = false;
+  cdParams = { fromLink: '/hosts' };
+  selection = new CdTableSelection();
 
-  @ViewChild('servicesTpl') public servicesTpl: TemplateRef<any>;
+  @ViewChild('servicesTpl')
+  public servicesTpl: TemplateRef<any>;
 
   constructor(
     private authStorageService: AuthStorageService,
     private hostService: HostService,
-    private cephShortVersionPipe: CephShortVersionPipe
+    private cephShortVersionPipe: CephShortVersionPipe,
+    private i18n: I18n
   ) {
     this.permissions = this.authStorageService.getPermissions();
   }
@@ -30,18 +38,18 @@ export class HostsComponent implements OnInit {
   ngOnInit() {
     this.columns = [
       {
-        name: 'Hostname',
+        name: this.i18n('Hostname'),
         prop: 'hostname',
         flexGrow: 1
       },
       {
-        name: 'Services',
+        name: this.i18n('Services'),
         prop: 'services',
         flexGrow: 3,
         cellTemplate: this.servicesTpl
       },
       {
-        name: 'Version',
+        name: this.i18n('Version'),
         prop: 'ceph_version',
         flexGrow: 1,
         pipe: this.cephShortVersionPipe
@@ -49,7 +57,11 @@ export class HostsComponent implements OnInit {
     ];
   }
 
-  getHosts() {
+  updateSelection(selection: CdTableSelection) {
+    this.selection = selection;
+  }
+
+  getHosts(context: CdTableFetchDataContext) {
     if (this.isLoadingHosts) {
       return;
     }
@@ -59,7 +71,8 @@ export class HostsComponent implements OnInit {
       osd: 'osd',
       rgw: 'rgw',
       'rbd-mirror': 'rbdMirroring',
-      mgr: 'manager'
+      mgr: 'manager',
+      'tcmu-runner': 'iscsi'
     };
     this.isLoadingHosts = true;
     this.hostService
@@ -68,8 +81,8 @@ export class HostsComponent implements OnInit {
         resp.map((host) => {
           host.services.map((service) => {
             service.cdLink = `/perf_counters/${service.type}/${service.id}`;
-            const permissionKey = typeToPermissionKey[service.type];
-            service.canRead = this.permissions[permissionKey].read;
+            const permission = this.permissions[typeToPermissionKey[service.type]];
+            service.canRead = permission ? permission.read : false;
             return service;
           });
           return host;
@@ -79,6 +92,7 @@ export class HostsComponent implements OnInit {
       })
       .catch(() => {
         this.isLoadingHosts = false;
+        context.error();
       });
   }
 }

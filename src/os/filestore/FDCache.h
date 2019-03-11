@@ -40,7 +40,7 @@ public:
   public:
     const int fd;
     explicit FD(int _fd) : fd(_fd) {
-      assert(_fd >= 0);
+      ceph_assert(_fd >= 0);
     }
     int operator*() const {
       return fd;
@@ -58,8 +58,8 @@ private:
 public:
   explicit FDCache(CephContext *cct) : cct(cct),
   registry_shards(std::max<int64_t>(cct->_conf->filestore_fd_cache_shards, 1)) {
-    assert(cct);
-    cct->_conf->add_observer(this);
+    ceph_assert(cct);
+    cct->_conf.add_observer(this);
     registry = new SharedLRU<ghobject_t, FD>[registry_shards];
     for (int i = 0; i < registry_shards; ++i) {
       registry[i].set_cct(cct);
@@ -68,7 +68,7 @@ public:
     }
   }
   ~FDCache() override {
-    cct->_conf->remove_observer(this);
+    cct->_conf.remove_observer(this);
     delete[] registry;
   }
   typedef std::shared_ptr<FD> FDRef;
@@ -97,7 +97,7 @@ public:
     };
     return KEYS;
   }
-  void handle_conf_change(const md_config_t *conf,
+  void handle_conf_change(const ConfigProxy& conf,
 			  const std::set<std::string> &changed) override {
     if (changed.count("filestore_fd_cache_size")) {
       for (int i = 0; i < registry_shards; ++i)

@@ -4,6 +4,7 @@ import threading
 import random
 import json
 import errno
+import six
 
 
 class Module(MgrModule):
@@ -27,10 +28,17 @@ class Module(MgrModule):
 
     # The test code in qa/ relies on these options existing -- they
     # are of course not really used for anything in the module
-    OPTIONS = [
-            {'name': 'testkey'},
-            {'name': 'testlkey'},
-            {'name': 'testnewline'}
+    MODULE_OPTIONS = [
+        {'name': 'testkey'},
+        {'name': 'testlkey'},
+        {'name': 'testnewline'},
+        {'name': 'roption1'},
+        {'name': 'roption2', 'type': 'str', 'default': 'xyz'},
+        {'name': 'rwoption1'},
+        {'name': 'rwoption2', 'type': 'int'},
+        {'name': 'rwoption3', 'type': 'float'},
+        {'name': 'rwoption4', 'type': 'str'},
+        {'name': 'rwoption5', 'type': 'bool'}
     ]
 
     COMMANDS = [
@@ -60,12 +68,45 @@ class Module(MgrModule):
                 "desc": "Peek at a configuration value (localized variant)",
                 "perm": "rw"
             },
+            {
+                "cmd": "mgr self-test remote",
+                "desc": "Test inter-module calls",
+                "perm": "rw"
+            },
+            {
+                "cmd": "mgr self-test module name=module,type=CephString",
+                "desc": "Run another module's self_test() method",
+                "perm": "rw"
+            },
+            {
+                "cmd": "mgr self-test health set name=checks,type=CephString",
+                "desc": "Set a health check from a JSON-formatted description.",
+                "perm": "rw"
+            },
+            {
+                "cmd": "mgr self-test health clear name=checks,type=CephString,n=N,req=False",
+                "desc": "Clear health checks by name. If no names provided, clear all.",
+                "perm": "rw"
+            },
+            {
+                "cmd": "mgr self-test insights_set_now_offset name=hours,type=CephString",
+                "desc": "Set the now time for the insights module.",
+                "perm": "rw"
+            },
+            {
+                "cmd": "mgr self-test cluster-log name=channel,type=CephString "
+                       "name=priority,type=CephString "
+                       "name=message,type=CephString",
+                "desc": "Create an audit log record.",
+                "perm": "rw"
+            },
             ]
 
     def __init__(self, *args, **kwargs):
         super(Module, self).__init__(*args, **kwargs)
         self._event = threading.Event()
         self._workload = None
+        self._health = {}
 
     def handle_command(self, inbuf, command):
         if command['prefix'] == 'mgr self-test run':
@@ -90,12 +131,78 @@ class Module(MgrModule):
             else:
                 return 0, '', 'No background workload was running'
         elif command['prefix'] == 'mgr self-test config get':
-            return 0, str(self.get_config(command['key'])), ''
+            return 0, str(self.get_module_option(command['key'])), ''
         elif command['prefix'] == 'mgr self-test config get_localized':
-            return 0, str(self.get_localized_config(command['key'])), ''
+            return 0, str(self.get_localized_module_option(command['key'])), ''
+        elif command['prefix'] == 'mgr self-test remote':
+            self._test_remote_calls()
+            return 0, '', 'Successfully called'
+        elif command['prefix'] == 'mgr self-test module':
+            try:
+                r = self.remote(command['module'], "self_test")
+            except RuntimeError as e:
+                return -1, '', "Test failed: {0}".format(e.message)
+            else:
+                return 0, str(r), "Self-test OK"
+        elif command['prefix'] == 'mgr self-test health set':
+            return self._health_set(inbuf, command)
+        elif command['prefix'] == 'mgr self-test health clear':
+            return self._health_clear(inbuf, command)
+        elif command['prefix'] == 'mgr self-test insights_set_now_offset':
+            return self._insights_set_now_offset(inbuf, command)
+        elif command['prefix'] == 'mgr self-test cluster-log':
+            priority_map = {
+                'info': self.CLUSTER_LOG_PRIO_INFO,
+                'security': self.CLUSTER_LOG_PRIO_SEC,
+                'warning': self.CLUSTER_LOG_PRIO_WARN,
+                'error': self.CLUSTER_LOG_PRIO_ERROR
+            }
+            self.cluster_log(command['channel'],
+                             priority_map[command['priority']],
+                             command['message'])
+            return 0, '', 'Successfully called'
         else:
             return (-errno.EINVAL, '',
                     "Command not found '{0}'".format(command['prefix']))
+
+    def _health_set(self, inbuf, command):
+        try:
+            checks = json.loads(command["checks"])
+        except Exception as e:
+            return -1, "", "Failed to decode JSON input: {}".format(e.message)
+
+        try:
+            for check, info in six.iteritems(checks):
+                self._health[check] = {
+                    "severity": str(info["severity"]),
+                    "summary": str(info["summary"]),
+                    "detail": [str(m) for m in info["detail"]]
+                }
+        except Exception as e:
+            return -1, "", "Invalid health check format: {}".format(e.message)
+
+        self.set_health_checks(self._health)
+        return 0, "", ""
+
+    def _health_clear(self, inbuf, command):
+        if "checks" in command:
+            for check in command["checks"]:
+                if check in self._health:
+                    del self._health[check]
+        else:
+            self._health = dict()
+
+        self.set_health_checks(self._health)
+        return 0, "", ""
+
+    def _insights_set_now_offset(self, inbuf, command):
+        try:
+            hours = long(command["hours"])
+        except Exception as e:
+            return -1, "", "Timestamp must be numeric: {}".format(e.message)
+
+        self.remote("insights", "testing_set_now_time_offset", hours)
+        return 0, "", ""
 
     def _self_test(self):
         self.log.info("Running self-test procedure...")
@@ -134,7 +241,9 @@ class Module(MgrModule):
                 "mgr_map"
                 ]
         for obj in objects:
-            self.get(obj)
+            assert self.get(obj) is not None
+
+        assert self.get("__OBJ_DNE__") is None
 
         servers = self.list_servers()
         for server in servers:
@@ -152,11 +261,78 @@ class Module(MgrModule):
         # This is not a strong test (can't tell if values really
         # persisted), it's just for the python interface bit.
 
-        self.set_config("testkey", "testvalue")
-        assert self.get_config("testkey") == "testvalue"
+        self.set_module_option("testkey", "testvalue")
+        assert self.get_module_option("testkey") == "testvalue"
 
-        self.set_localized_config("testkey", "testvalue")
-        assert self.get_localized_config("testkey") == "testvalue"
+        self.set_localized_module_option("testkey", "testvalue")
+        assert self.get_localized_module_option("testkey") == "testvalue"
+
+        # Use default value.
+        assert self.get_module_option("roption1") is None
+        assert self.get_module_option("roption1", "foobar") == "foobar"
+        assert self.get_module_option("roption2") == "xyz"
+        assert self.get_module_option("roption2", "foobar") == "xyz"
+
+        # Option type is not defined => return as string.
+        self.set_module_option("rwoption1", 8080)
+        value = self.get_module_option("rwoption1")
+        assert isinstance(value, str)
+        assert value == "8080"
+
+        # Option type is defined => return as integer.
+        self.set_module_option("rwoption2", 10)
+        value = self.get_module_option("rwoption2")
+        assert isinstance(value, int)
+        assert value == 10
+
+        # Option type is defined => return as float.
+        self.set_module_option("rwoption3", 1.5)
+        value = self.get_module_option("rwoption3")
+        assert isinstance(value, float)
+        assert value == 1.5
+
+        # Option type is defined => return as string.
+        self.set_module_option("rwoption4", "foo")
+        value = self.get_module_option("rwoption4")
+        assert isinstance(value, str)
+        assert value == "foo"
+
+        # Option type is defined => return as bool.
+        self.set_module_option("rwoption5", False)
+        value = self.get_module_option("rwoption5")
+        assert isinstance(value, bool)
+        assert value is False
+
+        # Specified module does not exist => return None.
+        assert self.get_module_option_ex("foo", "bar") is None
+
+        # Specified key does not exist => return None.
+        assert self.get_module_option_ex("dashboard", "bar") is None
+
+        self.set_module_option_ex("telemetry", "contact", "test@test.com")
+        assert self.get_module_option_ex("telemetry", "contact") == "test@test.com"
+
+        # No option default value, so use the specified one.
+        assert self.get_module_option_ex("dashboard", "password") is None
+        assert self.get_module_option_ex("dashboard", "password", "foobar") == "foobar"
+
+        # Option type is not defined => return as string.
+        self.set_module_option_ex("selftest", "rwoption1", 1234)
+        value = self.get_module_option_ex("selftest", "rwoption1")
+        assert isinstance(value, str)
+        assert value == "1234"
+
+        # Option type is defined => return as integer.
+        self.set_module_option_ex("telemetry", "interval", 60)
+        value = self.get_module_option_ex("telemetry", "interval")
+        assert isinstance(value, int)
+        assert value == 60
+
+        # Option type is defined => return as bool.
+        self.set_module_option_ex("telemetry", "leaderboard", True)
+        value = self.get_module_option_ex("telemetry", "leaderboard")
+        assert isinstance(value, bool)
+        assert value is True
 
     def _self_test_store(self):
         existing_keys = set(self.get_store_prefix("test").keys())
@@ -203,6 +379,44 @@ class Module(MgrModule):
         #inc.set_crush_compat_weight_set_weights
 
         self.log.info("Finished self-test procedure.")
+
+    def _test_remote_calls(self):
+        # Test making valid call
+        self.remote("influx", "handle_command", "", {"prefix": "influx self-test"})
+
+        # Test calling module that exists but isn't enabled
+        # (arbitrarily pick a non-always-on module to use)
+        disabled_module = "telegraf"
+        mgr_map = self.get("mgr_map")
+        assert disabled_module not in mgr_map['modules']
+
+        # (This works until the Z release in about 2027)
+        latest_release = sorted(mgr_map['always_on_modules'].keys())[-1]
+        assert disabled_module not in mgr_map['always_on_modules'][latest_release]
+
+        try:
+            self.remote(disabled_module, "handle_command", {"prefix": "influx self-test"})
+        except ImportError:
+            pass
+        else:
+            raise RuntimeError("ImportError not raised for disabled module")
+
+        # Test calling module that doesn't exist
+        try:
+            self.remote("idontexist", "handle_command", {"prefix": "influx self-test"})
+        except ImportError:
+            pass
+        else:
+            raise RuntimeError("ImportError not raised for nonexistent module")
+
+        # Test calling method that doesn't exist
+        try:
+            self.remote("influx", "idontexist", {"prefix": "influx self-test"})
+        except NameError:
+            pass
+        else:
+            raise RuntimeError("KeyError not raised")
+
 
     def shutdown(self):
         self._workload = self.SHUTDOWN

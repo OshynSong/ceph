@@ -17,10 +17,13 @@
 
 #include "msg/Message.h"
 
-class MMgrOpen : public Message
-{
-  static const int HEAD_VERSION = 3;
-  static const int COMPAT_VERSION = 1;
+class MMgrOpen : public MessageInstance<MMgrOpen> {
+public:
+  friend factory;
+private:
+
+  static constexpr int HEAD_VERSION = 3;
+  static constexpr int COMPAT_VERSION = 1;
 
 public:
 
@@ -68,7 +71,7 @@ public:
     encode(config_defaults_bl, payload);
   }
 
-  const char *get_type_name() const override { return "mgropen"; }
+  std::string_view get_type_name() const override { return "mgropen"; }
   void print(ostream& out) const override {
     out << get_type_name() << "(";
     if (service_name.length()) {
@@ -84,7 +87,7 @@ public:
   }
 
   MMgrOpen()
-    : Message(MSG_MGR_OPEN, HEAD_VERSION, COMPAT_VERSION)
+    : MessageInstance(MSG_MGR_OPEN, HEAD_VERSION, COMPAT_VERSION)
   {}
 };
 

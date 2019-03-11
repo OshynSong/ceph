@@ -5,13 +5,13 @@
 #define CEPH_TEST_LIBRBD_MOCK_JOURNAL_H
 
 #include "gmock/gmock.h"
+#include "include/rados/librados_fwd.hpp"
 #include "librbd/Journal.h"
 #include "librbd/journal/Types.h"
 #include <list>
 
 struct Context;
 struct ContextWQ;
-namespace librados { class IoCtx; }
 
 namespace librbd {
 
@@ -20,7 +20,7 @@ struct ImageCtx;
 struct MockJournal {
   static MockJournal *s_instance;
   static MockJournal *get_instance() {
-    assert(s_instance != nullptr);
+    ceph_assert(s_instance != nullptr);
     return s_instance;
   }
 

@@ -20,7 +20,7 @@
 #include <string>
 #include <sys/time.h>
 
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 
 #if defined(__APPLE__)
 #include <sys/_types/_timespec.h>
@@ -179,6 +179,14 @@ namespace ceph {
 	clock_gettime(CLOCK_REALTIME, &ts);
 #endif
 	return from_timespec(ts);
+      }
+
+      static bool is_zero(const time_point& t) {
+	return (t == time_point::min());
+      }
+
+      static time_point zero() {
+	return time_point::min();
       }
 
       static time_t to_time_t(const time_point& t) noexcept {
@@ -479,6 +487,8 @@ inline timespan to_timespan(signedspan z) {
 }
 
 std::string timespan_str(timespan t);
+std::string exact_timespan_str(timespan t);
+std::chrono::seconds parse_timespan(const std::string& s);
 
 // detects presence of Clock::to_timespec() and from_timespec()
 template <typename Clock, typename = std::void_t<>>

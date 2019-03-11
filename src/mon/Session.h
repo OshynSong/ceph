@@ -15,6 +15,7 @@
 #ifndef CEPH_MON_SESSION_H
 #define CEPH_MON_SESSION_H
 
+#include "global/global_context.h"
 #include "include/xlist.h"
 #include "msg/msg_types.h"
 #include "mon/mon_types.h"
@@ -44,13 +45,12 @@ struct MonSession : public RefCountedObject {
   uint64_t con_features = 0;  // zero if AnonConnection
   entity_name_t name;
   entity_addrvec_t addrs;
+  entity_addr_t socket_addr;
   utime_t session_timeout;
   bool closed = false;
   xlist<MonSession*>::item item;
   set<uint64_t> routed_request_tids;
   MonCap caps;
-  uint64_t auid = 0;
-  uint64_t global_id = 0;
 
   bool authenticated = false;  ///< true if auth handshake is complete
 
@@ -67,23 +67,27 @@ struct MonSession : public RefCountedObject {
   map<string,string> last_config;    ///< most recently shared config
   bool any_config = false;
 
-  MonSession(const entity_name_t& n, const entity_addrvec_t& av, Connection *c) :
-    RefCountedObject(g_ceph_context),
-    con(c),
-    con_type(c->get_peer_type()),
-    name(n),
-    addrs(av),
-    item(this) {
-    if (c->get_messenger()) {
+  MonSession(Connection *c)
+    : RefCountedObject(g_ceph_context),
+      con(c),
+      item(this) { }
+
+  void _ident(const entity_name_t& n, const entity_addrvec_t& av) {
+    con_type = con->get_peer_type();
+    name = n;
+    addrs = av;
+    socket_addr = con->get_peer_socket_addr();
+    if (con->get_messenger()) {
       // only fill in features if this is a non-anonymous connection
-      con_features = c->get_features();
+      con_features = con->get_features();
     }
   }
+
   ~MonSession() override {
     //generic_dout(0) << "~MonSession " << this << dendl;
     // we should have been removed before we get destructed; see MonSessionMap::remove_session()
-    assert(!item.is_on_list());
-    assert(sub_map.empty());
+    ceph_assert(!item.is_on_list());
+    ceph_assert(sub_map.empty());
     delete auth_handler;
   }
 
@@ -94,7 +98,12 @@ struct MonSession : public RefCountedObject {
       CEPH_ENTITY_TYPE_MON,
       entity_name,
       service, "", args,
-      mask & MON_CAP_R, mask & MON_CAP_W, mask & MON_CAP_X);
+      mask & MON_CAP_R, mask & MON_CAP_W, mask & MON_CAP_X,
+      get_peer_socket_addr());
+  }
+
+  const entity_addr_t& get_peer_socket_addr() {
+    return socket_addr;
   }
 };
 
@@ -108,7 +117,7 @@ struct MonSessionMap {
   MonSessionMap() {}
   ~MonSessionMap() {
     while (!subs.empty()) {
-      assert(subs.begin()->second->empty());
+      ceph_assert(subs.begin()->second->empty());
       delete subs.begin()->second;
       subs.erase(subs.begin());
     }
@@ -119,7 +128,7 @@ struct MonSessionMap {
   }
 
   void remove_session(MonSession *s) {
-    assert(!s->closed);
+    ceph_assert(!s->closed);
     for (map<string,Subscription*>::iterator p = s->sub_map.begin(); p != s->sub_map.end(); ++p) {
       p->second->type_item.remove_myself();
       delete p->second;
@@ -145,16 +154,22 @@ struct MonSessionMap {
   MonSession *new_session(const entity_name_t& n,
 			  const entity_addrvec_t& av,
 			  Connection *c) {
-    MonSession *s = new MonSession(n, av, c);
-    assert(s);
+    MonSession *s = new MonSession(c);
+    ceph_assert(s);
+    s->_ident(n, av);
+    add_session(s);
+    return s;
+  }
+
+  void add_session(MonSession *s) {
     sessions.push_back(&s->item);
-    if (n.is_osd())
-      by_osd.insert(pair<int,MonSession*>(n.num(), s));
+    s->get();
+    if (s->name.is_osd()) {
+      by_osd.insert(pair<int,MonSession*>(s->name.num(), s));
+    }
     if (s->con_features) {
       feature_map.add(s->con_type, s->con_features);
     }
-    s->get();  // caller gets a ref
-    return s;
   }
 
   MonSession *get_random_osd_session(OSDMap *osdmap) {

@@ -26,10 +26,11 @@
  */
 class PyModuleRunner
 {
-protected:
+public:
   // Info about the module we're going to run
   PyModuleRef py_module;
 
+protected:
   // Populated by descendent class
   PyObject *pClassInstance = nullptr;
 
@@ -70,7 +71,7 @@ public:
     // required to be <16 chars
     thread_name = py_module->get_name().substr(0, 15);
 
-    assert(py_module != nullptr);
+    ceph_assert(py_module != nullptr);
   }
 
   ~PyModuleRunner();

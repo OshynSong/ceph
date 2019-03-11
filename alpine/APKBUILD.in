@@ -47,6 +47,7 @@ makedepends="
 	lvm2-dev
 	nss-dev
 	openldap-dev
+	krb5-dev
 	parted
 	procps
 	python-dev
@@ -434,7 +435,8 @@ ceph_test() {
 		ceph-monstore-tool \
 		ceph-osdomap-tool \
 		ceph-kvstore-tool \
-		ceph-debugpack
+		ceph-debugpack \
+		cephdeduptool
 
 	_pkg $_libdir ceph/ceph-monstore-update-crush.sh
 }

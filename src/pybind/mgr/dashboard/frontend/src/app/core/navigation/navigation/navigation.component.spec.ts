@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
+import { configureTestBed, i18nProviders } from '../../../../testing/unit-test-helper';
 import { AppModule } from '../../../app.module';
-import { configureTestBed } from '../../../shared/unit-test-helper';
 import { NavigationComponent } from './navigation.component';
 
 describe('NavigationComponent', () => {
@@ -9,7 +9,8 @@ describe('NavigationComponent', () => {
   let fixture: ComponentFixture<NavigationComponent>;
 
   configureTestBed({
-    imports: [AppModule]
+    imports: [AppModule],
+    providers: i18nProviders
   });
 
   beforeEach(() => {

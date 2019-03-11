@@ -20,6 +20,7 @@
 #include "BaseMgrStandbyModule.h"
 #include "Gil.h"
 #include "MgrContext.h"
+#include "mgr/mgr_commands.h"
 
 #include "ActivePyModules.h"
 
@@ -35,7 +36,7 @@
 
 void PyModuleRegistry::init()
 {
-  Mutex::Locker locker(lock);
+  std::lock_guard locker(lock);
 
   // Set up global python interpreter
 #if PY_MAJOR_VERSION >= 3
@@ -46,7 +47,7 @@ void PyModuleRegistry::init()
   Py_SetProgramName(const_cast<char*>(PYTHON_EXECUTABLE));
 #endif
   // Add more modules
-  if (g_conf->get_val<bool>("daemonize")) {
+  if (g_conf().get_val<bool>("daemonize")) {
     PyImport_AppendInittab("ceph_logger", PyModule::init_ceph_logger);
   }
   PyImport_AppendInittab("ceph_module", PyModule::init_ceph_module);
@@ -61,7 +62,7 @@ void PyModuleRegistry::init()
   // Drop the GIL and remember the main thread state (current
   // thread state becomes NULL)
   pMainThreadState = PyEval_SaveThread();
-  assert(pMainThreadState != nullptr);
+  ceph_assert(pMainThreadState != nullptr);
 
   std::list<std::string> failed_modules;
 
@@ -96,7 +97,7 @@ void PyModuleRegistry::init()
 
 bool PyModuleRegistry::handle_mgr_map(const MgrMap &mgr_map_)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard l(lock);
 
   if (mgr_map.epoch == 0) {
     mgr_map = mgr_map_;
@@ -107,11 +108,14 @@ bool PyModuleRegistry::handle_mgr_map(const MgrMap &mgr_map_)
     for (const auto &[module_name, module] : modules) {
       const bool enabled = (mgr_map.modules.count(module_name) > 0);
       module->set_enabled(enabled);
+      const bool always_on = (mgr_map.get_always_on_modules().count(module_name) > 0);
+      module->set_always_on(always_on);
     }
 
     return false;
   } else {
-    bool modules_changed = mgr_map_.modules != mgr_map.modules;
+    bool modules_changed = mgr_map_.modules != mgr_map.modules ||
+      mgr_map_.always_on_modules != mgr_map.always_on_modules;
     mgr_map = mgr_map_;
 
     if (standby_modules != nullptr) {
@@ -124,36 +128,34 @@ bool PyModuleRegistry::handle_mgr_map(const MgrMap &mgr_map_)
 
 
 
-void PyModuleRegistry::standby_start(MonClient &mc)
+void PyModuleRegistry::standby_start(MonClient &mc, Finisher &f)
 {
-  Mutex::Locker l(lock);
-  assert(active_modules == nullptr);
-  assert(standby_modules == nullptr);
+  std::lock_guard l(lock);
+  ceph_assert(active_modules == nullptr);
+  ceph_assert(standby_modules == nullptr);
 
   // Must have seen a MgrMap by this point, in order to know
   // which modules should be enabled
-  assert(mgr_map.epoch > 0);
+  ceph_assert(mgr_map.epoch > 0);
 
   dout(4) << "Starting modules in standby mode" << dendl;
 
   standby_modules.reset(new StandbyPyModules(
-        mgr_map, module_config, clog, mc));
+        mgr_map, module_config, clog, mc, f));
 
   std::set<std::string> failed_modules;
   for (const auto &i : modules) {
     if (!(i.second->is_enabled() && i.second->get_can_run())) {
+      // report always_on modules with a standby mode that won't run
+      if (i.second->is_always_on() && i.second->pStandbyClass) {
+        failed_modules.insert(i.second->get_name());
+      }
       continue;
     }
 
     if (i.second->pStandbyClass) {
       dout(4) << "starting module " << i.second->get_name() << dendl;
-      int r = standby_modules->start_one(i.second);
-      if (r != 0) {
-        derr << "failed to start module '" << i.second->get_name()
-             << "'" << dendl;;
-        failed_modules.insert(i.second->get_name());
-        // Continue trying to load any other modules
-      }
+      standby_modules->start_one(i.second);
     } else {
       dout(4) << "skipping module '" << i.second->get_name() << "' because "
                  "it does not implement a standby mode" << dendl;
@@ -170,18 +172,19 @@ void PyModuleRegistry::standby_start(MonClient &mc)
 void PyModuleRegistry::active_start(
             DaemonStateIndex &ds, ClusterState &cs,
             const std::map<std::string, std::string> &kv_store,
-            MonClient &mc, LogChannelRef clog_, Objecter &objecter_,
-            Client &client_, Finisher &f)
+            MonClient &mc, LogChannelRef clog_, LogChannelRef audit_clog_,
+            Objecter &objecter_, Client &client_, Finisher &f,
+            DaemonServer &server)
 {
-  Mutex::Locker locker(lock);
+  std::lock_guard locker(lock);
 
   dout(4) << "Starting modules in active mode" << dendl;
 
-  assert(active_modules == nullptr);
+  ceph_assert(active_modules == nullptr);
 
   // Must have seen a MgrMap by this point, in order to know
   // which modules should be enabled
-  assert(mgr_map.epoch > 0);
+  ceph_assert(mgr_map.epoch > 0);
 
   if (standby_modules != nullptr) {
     standby_modules->shutdown();
@@ -190,7 +193,8 @@ void PyModuleRegistry::active_start(
 
   active_modules.reset(new ActivePyModules(
               module_config, kv_store, ds, cs, mc,
-              clog_, objecter_, client_, f));
+              clog_, audit_clog_, objecter_, client_, f, server,
+              *this));
 
   for (const auto &i : modules) {
     // Anything we're skipping because of !can_run will be flagged
@@ -200,17 +204,13 @@ void PyModuleRegistry::active_start(
     }
 
     dout(4) << "Starting " << i.first << dendl;
-    int r = active_modules->start_one(i.second);
-    if (r != 0) {
-      derr << "Failed to run module in active mode ('" << i.first << "')"
-           << dendl;
-    }
+    active_modules->start_one(i.second);
   }
 }
 
 void PyModuleRegistry::active_shutdown()
 {
-  Mutex::Locker locker(lock);
+  std::lock_guard locker(lock);
 
   if (active_modules != nullptr) {
     active_modules->shutdown();
@@ -220,7 +220,7 @@ void PyModuleRegistry::active_shutdown()
 
 void PyModuleRegistry::shutdown()
 {
-  Mutex::Locker locker(lock);
+  std::lock_guard locker(lock);
 
   if (standby_modules != nullptr) {
     standby_modules->shutdown();
@@ -257,7 +257,7 @@ void PyModuleRegistry::shutdown()
 
 std::set<std::string> PyModuleRegistry::probe_modules() const
 {
-  std::string path = g_conf->get_val<std::string>("mgr_module_path");
+  std::string path = g_conf().get_val<std::string>("mgr_module_path");
 
   DIR *dir = opendir(path.c_str());
   if (!dir) {
@@ -302,7 +302,7 @@ int PyModuleRegistry::handle_command(
 
 std::vector<ModuleCommand> PyModuleRegistry::get_py_commands() const
 {
-  Mutex::Locker l(lock);
+  std::lock_guard l(lock);
 
   std::vector<ModuleCommand> result;
   for (const auto& i : modules) {
@@ -322,14 +322,14 @@ std::vector<MonCommand> PyModuleRegistry::get_commands() const
       flags |= MonCommand::FLAG_POLL;
     }
     result.push_back({pyc.cmdstring, pyc.helpstring, "mgr",
-                        pyc.perm, "cli", flags});
+                        pyc.perm, flags});
   }
   return result;
 }
 
 void PyModuleRegistry::get_health_checks(health_check_map_t *checks)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard l(lock);
 
   // Only the active mgr reports module issues
   if (active_modules) {
@@ -365,6 +365,16 @@ void PyModuleRegistry::get_health_checks(health_check_map_t *checks)
       }
     }
 
+    // report failed always_on modules as health errors
+    for (const auto& name : mgr_map.get_always_on_modules()) {
+      if (!active_modules->module_exists(name)) {
+        if (failed_modules.find(name) == failed_modules.end() &&
+            dependency_modules.find(name) == dependency_modules.end()) {
+          failed_modules[name] = "Not found or unloadable";
+        }
+      }
+    }
+
     if (!dependency_modules.empty()) {
       std::ostringstream ss;
       if (dependency_modules.size() == 1) {
@@ -372,34 +382,52 @@ void PyModuleRegistry::get_health_checks(health_check_map_t *checks)
         ss << "Module '" << iter->first << "' has failed dependency: "
            << iter->second;
       } else if (dependency_modules.size() > 1) {
-        ss << dependency_modules.size() << " modules have failed dependencies";
+        ss << dependency_modules.size()
+	   << " mgr modules have failed dependencies";
       }
-      checks->add("MGR_MODULE_DEPENDENCY", HEALTH_WARN, ss.str());
+      auto& d = checks->add("MGR_MODULE_DEPENDENCY", HEALTH_WARN, ss.str());
+      for (auto& i : dependency_modules) {
+	std::ostringstream ss;
+        ss << "Module '" << i.first << "' has failed dependency: " << i.second;
+	d.detail.push_back(ss.str());
+      }
     }
 
     if (!failed_modules.empty()) {
       std::ostringstream ss;
       if (failed_modules.size() == 1) {
         auto iter = failed_modules.begin();
-        ss << "Module '" << iter->first << "' has failed: "
-           << iter->second;
+        ss << "Module '" << iter->first << "' has failed: " << iter->second;
       } else if (failed_modules.size() > 1) {
-        ss << failed_modules.size() << " modules have failed";
+        ss << failed_modules.size() << " mgr modules have failed";
       }
-      checks->add("MGR_MODULE_ERROR", HEALTH_ERR, ss.str());
+      auto& d = checks->add("MGR_MODULE_ERROR", HEALTH_ERR, ss.str());
+      for (auto& i : failed_modules) {
+	std::ostringstream ss;
+        ss << "Module '" << i.first << "' has failed: " << i.second;
+	d.detail.push_back(ss.str());
+      }
     }
   }
 }
 
 void PyModuleRegistry::handle_config(const std::string &k, const std::string &v)
 {
-  Mutex::Locker l(module_config.lock);
+  std::lock_guard l(module_config.lock);
 
   if (!v.empty()) {
     dout(4) << "Loaded module_config entry " << k << ":" << v << dendl;
     module_config.config[k] = v;
   } else {
     module_config.config.erase(k);
+  }
+}
+
+void PyModuleRegistry::handle_config_notify()
+{
+  std::lock_guard l(lock);
+  if (active_modules) {
+    active_modules->config_notify();
   }
 }
 

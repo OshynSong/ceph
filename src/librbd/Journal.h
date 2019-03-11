@@ -7,6 +7,7 @@
 #include "include/int_types.h"
 #include "include/Context.h"
 #include "include/interval_set.h"
+#include "include/rados/librados_fwd.hpp"
 #include "common/Cond.h"
 #include "common/Mutex.h"
 #include "common/Cond.h"
@@ -28,9 +29,6 @@
 class SafeTimer;
 namespace journal {
 class Journaler;
-}
-namespace librados {
-  class IoCtx;
 }
 
 namespace librbd {
@@ -152,7 +150,7 @@ public:
 
   uint64_t allocate_op_tid() {
     uint64_t op_tid = ++m_op_tid;
-    assert(op_tid != 0);
+    ceph_assert(op_tid != 0);
     return op_tid;
   }
 

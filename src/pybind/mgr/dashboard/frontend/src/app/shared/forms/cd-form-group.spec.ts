@@ -2,7 +2,7 @@ import { AbstractControl, FormControl, FormGroup, NgForm } from '@angular/forms'
 
 import { CdFormGroup } from './cd-form-group';
 
-describe('FormsHelperService', () => {
+describe('CdFormGroup', () => {
   let form: CdFormGroup;
 
   const createTestForm = (controlName: string, value: any): FormGroup =>
@@ -33,8 +33,8 @@ describe('FormsHelperService', () => {
     });
 
     it('should throw an error if element could be found', () => {
-      expect(() => form.get('d')).toThrowError('Control \'d\' could not be found!');
-      expect(() => form.get('sth')).toThrowError('Control \'sth\' could not be found!');
+      expect(() => form.get('d')).toThrowError(`Control 'd' could not be found!`);
+      expect(() => form.get('sth')).toThrowError(`Control 'sth' could not be found!`);
     });
   });
 
@@ -83,8 +83,8 @@ describe('FormsHelperService', () => {
     });
 
     it('should nested throw an error if control could not be found', () => {
-      expect(() => form.get('d')).toThrowError('Control \'d\' could not be found!');
-      expect(() => form.getValue('sth')).toThrowError('Control \'sth\' could not be found!');
+      expect(() => form.get('d')).toThrowError(`Control 'd' could not be found!`);
+      expect(() => form.getValue('sth')).toThrowError(`Control 'sth' could not be found!`);
     });
   });
 
@@ -118,7 +118,8 @@ describe('FormsHelperService', () => {
       expect(form.getValue('floating')).toBe(0.1);
     });
 
-    it('returns strings that are not empty', () => {
+    it('returns strings', () => {
+      expect(form.getValue('emptyString')).toBe('');
       expect(form.getValue('someString1')).toBe('s');
       expect(form.getValue('someString2')).toBe('sth');
     });
@@ -132,18 +133,10 @@ describe('FormsHelperService', () => {
       expect(form.getValue('undefined')).toBe(null);
     });
 
-    it('returns a falsy value for empty string, null, undefined, false and 0', () => {
-      expect(form.getValue('emptyString')).toBe(false);
+    it('returns a falsy value for null, undefined, false and 0', () => {
       expect(form.getValue('false')).toBeFalsy();
       expect(form.getValue('null')).toBeFalsy();
       expect(form.getValue('number0')).toBeFalsy();
-    });
-
-    it('test _filterValue', () => {
-      expect(form._filterValue(0)).toBe(true);
-      expect(form._filterValue(null)).toBe(true);
-      expect(form._filterValue(false)).toBe(true);
-      expect(form._filterValue('')).toBe(false);
     });
   });
 

@@ -1,8 +1,17 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 
+import { I18n } from '@ngx-translate/i18n-polyfill';
 import * as _ from 'lodash';
 
-import { DashboardService } from '../../../shared/api/dashboard.service';
+import { HealthService } from '../../../shared/api/health.service';
+import { Permissions } from '../../../shared/models/permissions';
+import { AuthStorageService } from '../../../shared/services/auth-storage.service';
+import {
+  FeatureTogglesMap$,
+  FeatureTogglesService
+} from '../../../shared/services/feature-toggles.service';
+import { PgCategoryService } from '../../shared/pg-category.service';
+import { HealthPieColor } from '../health-pie/health-pie-color.enum';
 
 @Component({
   selector: 'cd-health',
@@ -10,15 +19,26 @@ import { DashboardService } from '../../../shared/api/dashboard.service';
   styleUrls: ['./health.component.scss']
 })
 export class HealthComponent implements OnInit, OnDestroy {
-  contentData: any;
+  healthData: any;
   interval: number;
+  permissions: Permissions;
+  enabledFeature$: FeatureTogglesMap$;
 
-  constructor(private dashboardService: DashboardService) {}
+  constructor(
+    private healthService: HealthService,
+    private i18n: I18n,
+    private authStorageService: AuthStorageService,
+    private pgCategoryService: PgCategoryService,
+    private featureToggles: FeatureTogglesService
+  ) {
+    this.permissions = this.authStorageService.getPermissions();
+    this.enabledFeature$ = this.featureToggles.get();
+  }
 
   ngOnInit() {
-    this.getInfo();
+    this.getHealth();
     this.interval = window.setInterval(() => {
-      this.getInfo();
+      this.getHealth();
     }, 5000);
   }
 
@@ -26,74 +46,83 @@ export class HealthComponent implements OnInit, OnDestroy {
     clearInterval(this.interval);
   }
 
-  getInfo() {
-    this.dashboardService.getHealth().subscribe((data: any) => {
-      this.contentData = data;
+  getHealth() {
+    this.healthService.getMinimalHealth().subscribe((data: any) => {
+      this.healthData = data;
     });
+  }
+
+  prepareReadWriteRatio(chart) {
+    const ratioLabels = [];
+    const ratioData = [];
+
+    ratioLabels.push(this.i18n('Writes'));
+    ratioData.push(this.healthData.client_perf.write_op_per_sec);
+    ratioLabels.push(this.i18n('Reads'));
+    ratioData.push(this.healthData.client_perf.read_op_per_sec);
+
+    chart.dataset[0].data = ratioData;
+    chart.labels = ratioLabels;
   }
 
   prepareRawUsage(chart, data) {
-    let rawUsageChartColor;
+    const percentAvailable = Math.round(
+      100 *
+        ((data.df.stats.total_bytes - data.df.stats.total_used_raw_bytes) /
+          data.df.stats.total_bytes)
+    );
 
-    const rawUsageText =
-      Math.round(100 * (data.df.stats.total_used_bytes / data.df.stats.total_bytes)) + '%';
+    const percentUsed = Math.round(
+      100 * (data.df.stats.total_used_raw_bytes / data.df.stats.total_bytes)
+    );
 
-    if (data.df.stats.total_used_bytes / data.df.stats.total_bytes >= data.osd_map.full_ratio) {
-      rawUsageChartColor = '#ff0000';
-    } else if (
-      data.df.stats.total_used_bytes / data.df.stats.total_bytes >=
-      data.osd_map.backfillfull_ratio
-    ) {
-      rawUsageChartColor = '#ff6600';
-    } else if (
-      data.df.stats.total_used_bytes / data.df.stats.total_bytes >=
-      data.osd_map.nearfull_ratio
-    ) {
-      rawUsageChartColor = '#ffc200';
-    } else {
-      rawUsageChartColor = '#00bb00';
+    chart.dataset[0].data = [data.df.stats.total_used_raw_bytes, data.df.stats.total_avail_bytes];
+    if (chart === 'doughnut') {
+      chart.options.cutoutPercentage = 65;
     }
-
-    chart.dataset[0].data = [data.df.stats.total_used_bytes, data.df.stats.total_avail_bytes];
-    chart.options.center_text = rawUsageText;
-    chart.colors = [{ backgroundColor: [rawUsageChartColor, '#424d52'] }];
-    chart.labels = ['Raw Used', 'Raw Available'];
+    chart.labels = [
+      `${this.i18n('Used')} (${percentUsed}%)`,
+      `${this.i18n('Avail.')} (${percentAvailable}%)`
+    ];
   }
 
-  preparePoolUsage(chart, data) {
-    const colors = [
-      '#3366CC',
-      '#109618',
-      '#990099',
-      '#3B3EAC',
-      '#0099C6',
-      '#DD4477',
-      '#66AA00',
-      '#B82E2E',
-      '#316395',
-      '#994499',
-      '#22AA99',
-      '#AAAA11',
-      '#6633CC',
-      '#E67300',
-      '#8B0707',
-      '#329262',
-      '#5574A6',
-      '#FF9900',
-      '#DC3912',
-      '#3B3EAC'
+  preparePgStatus(chart, data) {
+    const categoryPgAmount = {};
+    chart.labels = [
+      this.i18n('Clean'),
+      this.i18n('Working'),
+      this.i18n('Warning'),
+      this.i18n('Unknown')
+    ];
+    chart.colors = [
+      {
+        backgroundColor: [
+          HealthPieColor.DEFAULT_GREEN,
+          HealthPieColor.DEFAULT_BLUE,
+          HealthPieColor.DEFAULT_ORANGE,
+          HealthPieColor.DEFAULT_RED
+        ]
+      }
     ];
 
-    const poolLabels = [];
-    const poolData = [];
+    _.forEach(data.pg_info.statuses, (pgAmount, pgStatesText) => {
+      const categoryType = this.pgCategoryService.getTypeByStates(pgStatesText);
 
-    _.each(data.df.pools, (pool, i) => {
-      poolLabels.push(pool['name']);
-      poolData.push(pool['stats']['bytes_used']);
+      if (_.isUndefined(categoryPgAmount[categoryType])) {
+        categoryPgAmount[categoryType] = 0;
+      }
+      categoryPgAmount[categoryType] += pgAmount;
     });
 
-    chart.dataset[0].data = poolData;
-    chart.colors = [{ backgroundColor: colors }];
-    chart.labels = poolLabels;
+    chart.dataset[0].data = this.pgCategoryService
+      .getAllTypes()
+      .map((categoryType) => categoryPgAmount[categoryType]);
+  }
+
+  isClientReadWriteChartShowable() {
+    const readOps = this.healthData.client_perf.read_op_per_sec || 0;
+    const writeOps = this.healthData.client_perf.write_op_per_sec || 0;
+
+    return readOps + writeOps > 0;
   }
 }

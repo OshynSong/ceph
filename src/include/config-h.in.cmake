@@ -93,6 +93,9 @@
 /* Defined if you have libaio */
 #cmakedefine HAVE_LIBAIO
 
+/* Defind if you have POSIX AIO */
+#cmakedefine HAVE_POSIXAIO
+
 /* Defined if OpenLDAP enabled */
 #cmakedefine HAVE_OPENLDAP
 
@@ -116,9 +119,6 @@
 
 /* Define if you have tcmalloc */
 #cmakedefine HAVE_LIBTCMALLOC
-
-/* Define if you have jemalloc */
-#cmakedefine HAVE_LIBJEMALLOC
 
 /* Define if have curl_multi_wait() */
 #cmakedefine HAVE_CURL_MULTI_WAIT 1
@@ -144,6 +144,9 @@
 
 /* define if cephfs enabled */
 #cmakedefine WITH_CEPHFS
+
+/*define if GSSAPI/KRB5 enabled */
+#cmakedefine HAVE_GSSAPI
 
 /* define if rbd enabled */
 #cmakedefine WITH_RBD
@@ -262,14 +265,11 @@
 /* Defined if you have libzfs enabled */
 #cmakedefine HAVE_LIBZFS
 
-/* Define if the C complier supports __func__ */
+/* Define if the C compiler supports __func__ */
 #cmakedefine HAVE_FUNC
 
-/* Define if the C complier supports __PRETTY_FUNCTION__ */
+/* Define if the C compiler supports __PRETTY_FUNCTION__ */
 #cmakedefine HAVE_PRETTY_FUNC
-
-/* F_SETPIPE_SZ is supported */
-#cmakedefine CEPH_HAVE_SETPIPE_SZ
 
 /* Have eventfd extension. */
 #cmakedefine HAVE_EVENTFD
@@ -336,8 +336,14 @@
 /* Defined if boost::context is available */
 #cmakedefine HAVE_BOOST_CONTEXT
 
+/* Defined if libradosstriper is enabled: */
+#cmakedefine WITH_LIBRADOSSTRIPER
+
 /* Defined if OpenSSL is available for the rgw beast frontend */
 #cmakedefine WITH_RADOSGW_BEAST_OPENSSL
+
+/* Defined if rabbitmq-c is available for rgw amqp push endpoint */
+#cmakedefine WITH_RADOSGW_AMQP_ENDPOINT
 
 /* Defined if std::map::merge() is supported */
 #cmakedefine HAVE_STDLIB_MAP_SPLICING
@@ -347,5 +353,8 @@
 
 /* Define if seastar is available. */
 #cmakedefine HAVE_SEASTAR
+
+/* Define if unit tests are built. */
+#cmakedefine UNIT_TESTS_BUILT
 
 #endif /* CONFIG_H */

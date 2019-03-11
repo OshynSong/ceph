@@ -39,7 +39,6 @@ function TEST_osd_pool_get_set() {
 
     setup $dir || return 1
     run_mon $dir a || return 1
-    create_rbd_pool || return 1
     create_pool $TEST_POOL 8
 
     local flag
@@ -125,8 +124,12 @@ function TEST_mon_add_to_single_mon() {
     # without the fix of #5454, mon.a will assert failure at seeing the MMonJoin
     # from mon.b
     run_mon $dir b --public-addr $MONB || return 1
+    # make sure mon.b get's it's join request in first, then
+    sleep 2
     # wait for the quorum
     timeout 120 ceph -s > /dev/null || return 1
+    ceph mon dump
+    ceph mon dump -f json-pretty
     local num_mons
     num_mons=$(ceph mon dump --format=json 2>/dev/null | jq ".mons | length") || return 1
     [ $num_mons == 2 ] || return 1

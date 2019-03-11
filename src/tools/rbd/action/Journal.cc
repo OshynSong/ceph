@@ -60,7 +60,7 @@ void add_journal_spec_options(po::options_description *pos,
   pos->add_options()
     ((get_name_prefix(modifier) + JOURNAL_SPEC).c_str(),
      (get_description_prefix(modifier) + "journal specification\n" +
-      "(example: [<pool-name>/[<namespace-name>/]]<journal-name>)").c_str());
+      "(example: [<pool-name>/[<namespace>/]]<journal-name>)").c_str());
   add_pool_option(opt, modifier);
   add_namespace_option(opt, modifier);
   add_image_option(opt, modifier);
@@ -749,7 +749,7 @@ public:
   }
 
   bool read_entry(bufferlist& bl, int& r) {
-    // Entries are storead in the file using the following format:
+    // Entries are stored in the file using the following format:
     //
     //   # Optional comments
     //   NNN {json encoded entry}
@@ -809,7 +809,7 @@ public:
 		<< std::endl;
       return false;
     }
-    assert(entry_size > 0);
+    ceph_assert(entry_size > 0);
     // Read entry.
     r = bl.read_fd(m_fd, entry_size);
     if (r < 0) {
@@ -832,7 +832,7 @@ public:
     if (r < 0) {
       return r;
     }
-    m_journaler.start_append(0, 0, 0);
+    m_journaler.start_append(0, 0, 0, 0);
 
     int r1 = 0;
     bufferlist bl;
@@ -1214,7 +1214,7 @@ int execute_import(const po::variables_map &vm,
   r = do_import_journal(io_ctx, journal_name, path, vm[at::NO_ERROR].as<bool>(),
 			vm[at::VERBOSE].as<bool>());
   if (r < 0) {
-    std::cerr << "rbd: journal export: " << cpp_strerror(r) << std::endl;
+    std::cerr << "rbd: journal import: " << cpp_strerror(r) << std::endl;
     return r;
   }
   return 0;

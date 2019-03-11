@@ -17,9 +17,12 @@
 
 #include "MOSDFastDispatchOp.h"
 
-class MOSDPGBackfill : public MOSDFastDispatchOp {
-  static const int HEAD_VERSION = 3;
-  static const int COMPAT_VERSION = 3;
+class MOSDPGBackfill : public MessageInstance<MOSDPGBackfill, MOSDFastDispatchOp> {
+public:
+  friend factory;
+private:
+  static constexpr int HEAD_VERSION = 3;
+  static constexpr int COMPAT_VERSION = 3;
 public:
   enum {
     OP_BACKFILL_PROGRESS = 2,
@@ -88,9 +91,9 @@ public:
   }
 
   MOSDPGBackfill()
-    : MOSDFastDispatchOp(MSG_OSD_PG_BACKFILL, HEAD_VERSION, COMPAT_VERSION) {}
+    : MessageInstance(MSG_OSD_PG_BACKFILL, HEAD_VERSION, COMPAT_VERSION) {}
   MOSDPGBackfill(__u32 o, epoch_t e, epoch_t qe, spg_t p)
-    : MOSDFastDispatchOp(MSG_OSD_PG_BACKFILL, HEAD_VERSION, COMPAT_VERSION),
+    : MessageInstance(MSG_OSD_PG_BACKFILL, HEAD_VERSION, COMPAT_VERSION),
       op(o),
       map_epoch(e), query_epoch(e),
       pgid(p) {}
@@ -98,7 +101,7 @@ private:
   ~MOSDPGBackfill() override {}
 
 public:
-  const char *get_type_name() const override { return "pg_backfill"; }
+  std::string_view get_type_name() const override { return "pg_backfill"; }
   void print(ostream& out) const override {
     out << "pg_backfill(" << get_op_name(op)
 	<< " " << pgid

@@ -1,40 +1,40 @@
+import { ToastOptions } from 'ng2-toastr';
 import { NotificationType } from '../enum/notification-type.enum';
 
-export class CdNotification {
-  message: string;
+export class CdNotificationConfig {
+  applicationClass: string;
+
+  private classes = {
+    Ceph: 'ceph-icon',
+    Prometheus: 'prometheus-icon'
+  };
+
+  constructor(
+    public type: NotificationType = NotificationType.info,
+    public title?: string,
+    public message?: string, // Use this for additional information only
+    public options?: any | ToastOptions,
+    public application: string = 'Ceph'
+  ) {
+    this.applicationClass = this.classes[this.application];
+  }
+}
+
+export class CdNotification extends CdNotificationConfig {
   timestamp: string;
-  title: string;
-  type: NotificationType;
+  textClass: string;
+  iconClass: string;
 
-  constructor(type: NotificationType = NotificationType.info, message?: string, title?: string) {
-    this.type = type;
-    this.message = message;
-    this.title = title;
+  private textClasses = ['text-danger', 'text-info', 'text-success'];
+  private iconClasses = ['fa-exclamation-triangle', 'fa-info', 'fa-check'];
 
+  constructor(private config: CdNotificationConfig = new CdNotificationConfig()) {
+    super(config.type, config.title, config.message, config.options, config.application);
+    delete this.config;
     /* string representation of the Date object so it can be directly compared
     with the timestamps parsed from localStorage */
     this.timestamp = new Date().toJSON();
-  }
-
-  textClass() {
-    switch (this.type) {
-      case NotificationType.error:
-        return 'text-danger';
-      case NotificationType.info:
-        return 'text-info';
-      case NotificationType.success:
-        return 'text-success';
-    }
-  }
-
-  iconClass() {
-    switch (this.type) {
-      case NotificationType.error:
-        return 'fa-exclamation-triangle';
-      case NotificationType.info:
-        return 'fa-info';
-      case NotificationType.success:
-        return 'fa-check';
-    }
+    this.iconClass = this.iconClasses[this.type];
+    this.textClass = this.textClasses[this.type];
   }
 }

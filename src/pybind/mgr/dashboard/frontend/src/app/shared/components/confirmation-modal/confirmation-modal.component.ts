@@ -1,7 +1,7 @@
 import { Component, OnInit, TemplateRef } from '@angular/core';
 import { FormGroup } from '@angular/forms';
 
-import { BsModalRef } from 'ngx-bootstrap';
+import { BsModalRef } from 'ngx-bootstrap/modal';
 
 @Component({
   selector: 'cd-confirmation-modal',
@@ -13,6 +13,7 @@ export class ConfirmationModalComponent implements OnInit {
   bodyTpl: TemplateRef<any>;
   buttonText: string;
   onSubmit: Function;
+  onCancel: Function;
   titleText: string;
 
   bodyContext: object;
@@ -23,13 +24,15 @@ export class ConfirmationModalComponent implements OnInit {
   }
 
   ngOnInit() {
-    this.bodyContext = {
-      $implicit: this.bodyData
-    };
+    this.bodyContext = this.bodyContext || {};
+    this.bodyContext['$implicit'] = this.bodyData;
   }
 
-  submit() {
-    this.onSubmit();
+  cancel() {
+    this.modalRef.hide();
+    if (this.onCancel) {
+      this.onCancel();
+    }
   }
 
   stopLoadingSpinner() {

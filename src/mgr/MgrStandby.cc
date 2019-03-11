@@ -41,7 +41,7 @@ MgrStandby::MgrStandby(int argc, const char **argv) :
   monc{g_ceph_context},
   client_messenger(Messenger::create(
 		     g_ceph_context,
-		     cct->_conf->get_val<std::string>("ms_type"),
+		     cct->_conf.get_val<std::string>("ms_type"),
 		     entity_name_t::MGR(),
 		     "mgr",
 		     getpid(),
@@ -53,6 +53,7 @@ MgrStandby::MgrStandby(int argc, const char **argv) :
   clog(log_client.create_channel(CLOG_CHANNEL_CLUSTER)),
   audit_clog(log_client.create_channel(CLOG_CHANNEL_AUDIT)),
   lock("MgrStandby::lock"),
+  finisher(g_ceph_context, "MgrStandby", "mgrsb-fin"),
   timer(g_ceph_context, lock),
   py_module_registry(clog),
   active_mgr(nullptr),
@@ -84,7 +85,7 @@ const char** MgrStandby::get_tracked_conf_keys() const
 }
 
 void MgrStandby::handle_conf_change(
-  const md_config_t *conf,
+  const ConfigProxy& conf,
   const std::set <std::string> &changed)
 {
   if (changed.count("clog_to_monitors") ||
@@ -105,7 +106,10 @@ int MgrStandby::init()
   init_async_signal_handler();
   register_async_signal_handler(SIGHUP, sighup_handler);
 
-  Mutex::Locker l(lock);
+  std::lock_guard l(lock);
+
+  // Start finisher
+  finisher.start();
 
   // Initialize Messenger
   client_messenger->add_dispatcher_tail(this);
@@ -138,6 +142,9 @@ int MgrStandby::init()
       }
       return false;
     });
+  monc.register_config_notify_callback([this]() {
+      py_module_registry.handle_config_notify();
+    });
   dout(4) << "Registered monc callback" << dendl;
 
   int r = monc.init();
@@ -158,6 +165,11 @@ int MgrStandby::init()
     client_messenger->wait();
     return r;
   }
+  // only forward monmap updates after authentication finishes, otherwise
+  // monc.authenticate() will be waiting for MgrStandy::ms_dispatch()
+  // to acquire the lock forever, as it is already locked in the beginning of
+  // this method.
+  monc.set_passthrough_monmap();
 
   client_t whoami = monc.get_global_id();
   client_messenger->set_myname(entity_name_t::MGR(whoami.v));
@@ -179,7 +191,7 @@ int MgrStandby::init()
 
 void MgrStandby::send_beacon()
 {
-  assert(lock.is_locked_by_me());
+  ceph_assert(lock.is_locked_by_me());
   dout(4) << state_str() << dendl;
 
   std::list<PyModuleRef> modules = py_module_registry.get_modules();
@@ -192,6 +204,7 @@ void MgrStandby::send_beacon()
     info.name = module->get_name();
     info.error_string = module->get_error_string();
     info.can_run = module->get_can_run();
+    info.module_options = module->get_options();
     module_info.push_back(std::move(info));
   }
 
@@ -203,12 +216,13 @@ void MgrStandby::send_beacon()
   dout(10) << "sending beacon as gid " << monc.get_global_id() << dendl;
 
   map<string,string> metadata;
-  metadata["addr"] = monc.get_my_addr().ip_only_to_str();
+  metadata["addr"] = client_messenger->get_myaddr_legacy().ip_only_to_str();
+  metadata["addrs"] = stringify(client_messenger->get_myaddrs());
   collect_sys_info(&metadata, g_ceph_context);
 
   MMgrBeacon *m = new MMgrBeacon(monc.get_fsid(),
 				 monc.get_global_id(),
-                                 g_conf->name.get_id(),
+                                 g_conf()->name.get_id(),
                                  addrs,
                                  available,
 				 std::move(module_info),
@@ -238,12 +252,8 @@ void MgrStandby::tick()
   dout(10) << __func__ << dendl;
   send_beacon();
 
-  if (active_mgr && active_mgr->is_initialized()) {
-    active_mgr->tick();
-  }
-
   timer.add_event_after(
-      g_conf->get_val<std::chrono::seconds>("mgr_tick_period").count(),
+      g_conf().get_val<std::chrono::seconds>("mgr_tick_period").count(),
       new FunctionContext([this](int r){
           tick();
       }
@@ -252,41 +262,55 @@ void MgrStandby::tick()
 
 void MgrStandby::handle_signal(int signum)
 {
-  Mutex::Locker l(lock);
-  assert(signum == SIGINT || signum == SIGTERM);
+  ceph_assert(signum == SIGINT || signum == SIGTERM);
   derr << "*** Got signal " << sig_str(signum) << " ***" << dendl;
-  shutdown();
+  _exit(128 + signum);
+  //shutdown();
 }
 
 void MgrStandby::shutdown()
 {
-  // Expect already to be locked as we're called from signal handler
-  assert(lock.is_locked_by_me());
+  finisher.queue(new FunctionContext([&](int) {
+    std::lock_guard l(lock);
 
-  dout(4) << "Shutting down" << dendl;
+    dout(4) << "Shutting down" << dendl;
 
-  // stop sending beacon first, i use monc to talk with monitors
-  timer.shutdown();
-  // client uses monc and objecter
-  client.shutdown();
-  mgrc.shutdown();
-  // stop monc, so mon won't be able to instruct me to shutdown/activate after
-  // the active_mgr is stopped
-  monc.shutdown();
-  if (active_mgr) {
-    active_mgr->shutdown();
-  }
+    // stop sending beacon first, i use monc to talk with monitors
+    timer.shutdown();
+    // client uses monc and objecter
+    client.shutdown();
+    mgrc.shutdown();
+    // stop monc, so mon won't be able to instruct me to shutdown/activate after
+    // the active_mgr is stopped
+    monc.shutdown();
+    if (active_mgr) {
+      active_mgr->shutdown();
+    }
 
-  py_module_registry.shutdown();
+    py_module_registry.shutdown();
 
-  // objecter is used by monc and active_mgr
-  objecter.shutdown();
-  // client_messenger is used by all of them, so stop it in the end
-  client_messenger->shutdown();
+    // objecter is used by monc and active_mgr
+    objecter.shutdown();
+    // client_messenger is used by all of them, so stop it in the end
+    client_messenger->shutdown();
+  }));
+
+  // Then stop the finisher to ensure its enqueued contexts aren't going
+  // to touch references to the things we're about to tear down
+  finisher.wait_for_empty();
+  finisher.stop();
 }
 
 void MgrStandby::respawn()
 {
+  // --- WARNING TO FUTURE COPY/PASTERS ---
+  // You must also add a call like
+  //
+  //   ceph_pthread_setname(pthread_self(), "ceph-mgr");
+  //
+  // to main() so that /proc/$pid/stat field 2 contains "(ceph-mgr)"
+  // instead of "(exe)", so that killall (and log rotation) will work.
+
   char *new_argv[orig_argc+1];
   dout(1) << " e: '" << orig_argv[0] << "'" << dendl;
   for (int i=0; i<orig_argc; i++) {
@@ -304,7 +328,7 @@ void MgrStandby::respawn()
     /* Print CWD for the user's interest */
     char buf[PATH_MAX];
     char *cwd = getcwd(buf, sizeof(buf));
-    assert(cwd);
+    ceph_assert(cwd);
     dout(1) << " cwd " << cwd << dendl;
 
     /* Fall back to a best-effort: just running in our CWD */
@@ -376,7 +400,7 @@ void MgrStandby::handle_mgr_map(MMgrMap* mmap)
             [this](int r){
               // Advertise our active-ness ASAP instead of waiting for
               // next tick.
-              Mutex::Locker l(lock);
+              std::lock_guard l(lock);
               send_beacon();
             }));
       dout(1) << "I am now activating" << dendl;
@@ -396,11 +420,11 @@ void MgrStandby::handle_mgr_map(MMgrMap* mmap)
     derr << "I was active but no longer am" << dendl;
     respawn();
   } else {
-    if (map.active_gid != 0 && map.active_name != g_conf->name.get_id()) {
+    if (map.active_gid != 0 && map.active_name != g_conf()->name.get_id()) {
       // I am the standby and someone else is active, start modules
       // in standby mode to do redirects if needed
       if (!py_module_registry.is_standby_running()) {
-        py_module_registry.standby_start(monc);
+        py_module_registry.standby_start(monc, finisher);
       }
     }
   }
@@ -408,7 +432,7 @@ void MgrStandby::handle_mgr_map(MMgrMap* mmap)
 
 bool MgrStandby::ms_dispatch(Message *m)
 {
-  Mutex::Locker l(lock);
+  std::lock_guard l(lock);
   dout(4) << state_str() << " " << *m << dendl;
 
   if (m->get_type() == MSG_MGR_MAP) {
@@ -429,16 +453,10 @@ bool MgrStandby::ms_dispatch(Message *m)
 }
 
 
-bool MgrStandby::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                         bool force_new)
+bool MgrStandby::ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer)
 {
   if (dest_type == CEPH_ENTITY_TYPE_MON)
     return true;
-
-  if (force_new) {
-    if (monc.wait_auth_rotating(10) < 0)
-      return false;
-  }
 
   *authorizer = monc.build_authorizer(dest_type);
   return *authorizer != NULL;

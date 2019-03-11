@@ -17,24 +17,27 @@
 
 #include "msg/Message.h"
 
-class MExportDirFinish : public Message {
+class MExportDirFinish : public MessageInstance<MExportDirFinish> {
+public:
+  friend factory;
+private:
   dirfrag_t dirfrag;
   bool last;
 
  public:
-  dirfrag_t get_dirfrag() { return dirfrag; }
-  bool is_last() { return last; }
+  dirfrag_t get_dirfrag() const { return dirfrag; }
+  bool is_last() const { return last; }
   
+protected:
   MExportDirFinish() : last(false) {}
   MExportDirFinish(dirfrag_t df, bool l, uint64_t tid) :
-    Message(MSG_MDS_EXPORTDIRFINISH), dirfrag(df), last(l) {
+    MessageInstance(MSG_MDS_EXPORTDIRFINISH), dirfrag(df), last(l) {
     set_tid(tid);
   }
-private:
   ~MExportDirFinish() override {}
 
 public:
-  const char *get_type_name() const override { return "ExFin"; }
+  std::string_view get_type_name() const override { return "ExFin"; }
   void print(ostream& o) const override {
     o << "export_finish(" << dirfrag << (last ? " last" : "") << ")";
   }

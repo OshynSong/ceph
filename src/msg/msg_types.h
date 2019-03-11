@@ -1,4 +1,4 @@
-// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*- 
+// -*- mode:C++; tab-width:8; c-basic-offset:2; indent-tabs-mode:t -*-
 // vim: ts=8 sw=2 smarttab
 /*
  * Ceph - scalable distributed file system
@@ -7,13 +7,15 @@
  *
  * This is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
- * License version 2.1, as published by the Free Software 
+ * License version 2.1, as published by the Free Software
  * Foundation.  See file COPYING.
- * 
+ *
  */
 
 #ifndef CEPH_MSG_TYPES_H
 #define CEPH_MSG_TYPES_H
+
+#include <sstream>
 
 #include <netinet/in.h>
 
@@ -50,7 +52,7 @@ public:
   // cons
   entity_name_t() : _type(0), _num(0) { }
   entity_name_t(int t, int64_t n) : _type(t), _num(n) { }
-  explicit entity_name_t(const ceph_entity_name &n) : 
+  explicit entity_name_t(const ceph_entity_name &n) :
     _type(n.type), _num(n.num) { }
 
   // static cons
@@ -59,7 +61,7 @@ public:
   static entity_name_t OSD(int64_t i=NEW) { return entity_name_t(TYPE_OSD, i); }
   static entity_name_t CLIENT(int64_t i=NEW) { return entity_name_t(TYPE_CLIENT, i); }
   static entity_name_t MGR(int64_t i=NEW) { return entity_name_t(TYPE_MGR, i); }
-  
+
   int64_t num() const { return _num; }
   int type() const { return _type; }
   const char *type_str() const {
@@ -122,11 +124,11 @@ public:
 };
 WRITE_CLASS_DENC(entity_name_t)
 
-inline bool operator== (const entity_name_t& l, const entity_name_t& r) { 
+inline bool operator== (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() == r.type()) && (l.num() == r.num()); }
-inline bool operator!= (const entity_name_t& l, const entity_name_t& r) { 
+inline bool operator!= (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() != r.type()) || (l.num() != r.num()); }
-inline bool operator< (const entity_name_t& l, const entity_name_t& r) { 
+inline bool operator< (const entity_name_t& l, const entity_name_t& r) {
   return (l.type() < r.type()) || (l.type() == r.type() && l.num() < r.num()); }
 
 inline std::ostream& operator<<(std::ostream& out, const entity_name_t& addr) {
@@ -137,7 +139,7 @@ inline std::ostream& operator<<(std::ostream& out, const entity_name_t& addr) {
     return out << addr.type_str() << '.' << addr.num();
 }
 inline std::ostream& operator<<(std::ostream& out, const ceph_entity_name& addr) {
-  return out << *(const entity_name_t*)&addr;
+  return out << entity_name_t{addr.type, static_cast<int64_t>(addr.num)};
 }
 
 namespace std {
@@ -232,13 +234,15 @@ struct entity_addr_t {
     TYPE_NONE = 0,
     TYPE_LEGACY = 1,  ///< legacy msgr1 protocol (ceph jewel and older)
     TYPE_MSGR2 = 2,   ///< msgr2 protocol (new in ceph kraken)
+    TYPE_ANY = 3,  ///< ambiguous
   } type_t;
-  static const type_t TYPE_DEFAULT = TYPE_LEGACY;
-  static const char *get_type_name(int t) {
+  static const type_t TYPE_DEFAULT = TYPE_MSGR2;
+  static std::string_view get_type_name(int t) {
     switch (t) {
     case TYPE_NONE: return "none";
-    case TYPE_LEGACY: return "legacy";
-    case TYPE_MSGR2: return "msgr2";
+    case TYPE_LEGACY: return "v1";
+    case TYPE_MSGR2: return "v2";
+    case TYPE_ANY: return "any";
     default: return "???";
     }
   };
@@ -251,7 +255,7 @@ struct entity_addr_t {
     sockaddr_in6 sin6;
   } u;
 
-  entity_addr_t() : type(0), nonce(0) { 
+  entity_addr_t() : type(0), nonce(0) {
     memset(&u, 0, sizeof(u));
   }
   entity_addr_t(__u32 _type, __u32 _nonce) : type(_type), nonce(_nonce) {
@@ -270,6 +274,7 @@ struct entity_addr_t {
   void set_type(uint32_t t) { type = t; }
   bool is_legacy() const { return type == TYPE_LEGACY; }
   bool is_msgr2() const { return type == TYPE_MSGR2; }
+  bool is_any() const { return type == TYPE_ANY; }
 
   __u32 get_nonce() const { return nonce; }
   void set_nonce(__u32 n) { nonce = n; }
@@ -279,6 +284,13 @@ struct entity_addr_t {
   }
   void set_family(int f) {
     u.sa.sa_family = f;
+  }
+
+  bool is_ipv4() const {
+    return u.sa.sa_family == AF_INET;
+  }
+  bool is_ipv6() const {
+    return u.sa.sa_family == AF_INET6;
   }
 
   sockaddr_in &in4_addr() {
@@ -309,10 +321,17 @@ struct entity_addr_t {
   {
     switch (sa->sa_family) {
     case AF_INET:
+      // pre-zero, since we're only copying a portion of the source
+      memset(&u, 0, sizeof(u));
       memcpy(&u.sin, sa, sizeof(u.sin));
       break;
     case AF_INET6:
+      // pre-zero, since we're only copying a portion of the source
+      memset(&u, 0, sizeof(u));
       memcpy(&u.sin6, sa, sizeof(u.sin6));
+      break;
+    case AF_UNSPEC:
+      memset(&u, 0, sizeof(u));
       break;
     default:
       return false;
@@ -378,7 +397,7 @@ struct entity_addr_t {
       return true;
     return false;
   }
-  
+
   bool is_same_host(const entity_addr_t &o) const {
     if (u.sa.sa_family != o.u.sa.sa_family)
       return false;
@@ -414,7 +433,13 @@ struct entity_addr_t {
 
   std::string ip_only_to_str() const;
 
-  bool parse(const char *s, const char **end = 0);
+  std::string get_legacy_str() const {
+    ostringstream ss;
+    ss << get_sockaddr() << "/" << get_nonce();
+    return ss.str();
+  }
+
+  bool parse(const char *s, const char **end = 0, int type=0);
 
   void decode_legacy_addr_after_marker(bufferlist::const_iterator& bl)
   {
@@ -423,11 +448,15 @@ struct entity_addr_t {
     __u16 rest;
     decode(marker, bl);
     decode(rest, bl);
-    type = TYPE_LEGACY;
     decode(nonce, bl);
     sockaddr_storage ss;
     decode(ss, bl);
     set_sockaddr((sockaddr*)&ss);
+    if (get_family() == AF_UNSPEC) {
+      type = TYPE_NONE;
+    } else {
+      type = TYPE_LEGACY;
+    }
   }
 
   // Right now, these only deal with sockaddr_storage that have only family and content.
@@ -445,7 +474,18 @@ struct entity_addr_t {
     }
     encode((__u8)1, bl);
     ENCODE_START(1, 1, bl);
-    encode(type, bl);
+    if (HAVE_FEATURE(features, SERVER_NAUTILUS)) {
+      encode(type, bl);
+    } else {
+      // map any -> legacy for old clients.  this is primary for the benefit
+      // of OSDMap's blacklist, but is reasonable in general since any: is
+      // meaningless for pre-nautilus clients or daemons.
+      auto t = type;
+      if (t == TYPE_ANY) {
+	t = TYPE_LEGACY;
+      }
+      encode(t, bl);
+    }
     encode(nonce, bl);
     __u32 elen = get_sockaddr_len();
     encode(elen, bl);
@@ -548,11 +588,58 @@ struct entity_addrvec_t {
     }
     return entity_addr_t();
   }
+  entity_addr_t as_legacy_addr() const {
+    for (auto& a : v) {
+      if (a.is_legacy()) {
+	return a;
+      }
+      if (a.is_any()) {
+	auto b = a;
+	b.set_type(entity_addr_t::TYPE_LEGACY);
+	return b;
+      }
+    }
+    // hrm... lie!
+    auto a = front();
+    a.set_type(entity_addr_t::TYPE_LEGACY);
+    return a;
+  }
   entity_addr_t front() const {
     if (!v.empty()) {
       return v.front();
     }
     return entity_addr_t();
+  }
+  entity_addr_t legacy_or_front_addr() const {
+    for (auto& a : v) {
+      if (a.type == entity_addr_t::TYPE_LEGACY) {
+	return a;
+      }
+    }
+    if (!v.empty()) {
+      return v.front();
+    }
+    return entity_addr_t();
+  }
+  string get_legacy_str() const {
+    return legacy_or_front_addr().get_legacy_str();
+  }
+
+  entity_addr_t msgr2_addr() const {
+    for (auto &a : v) {
+      if (a.type == entity_addr_t::TYPE_MSGR2) {
+        return a;
+      }
+    }
+    return entity_addr_t();
+  }
+  bool has_msgr2() const {
+    for (auto& a : v) {
+      if (a.is_msgr2()) {
+	return true;
+      }
+    }
+    return false;
   }
 
   bool parse(const char *s, const char **end = 0);
@@ -573,10 +660,24 @@ struct entity_addrvec_t {
   void dump(Formatter *f) const;
   static void generate_test_instances(list<entity_addrvec_t*>& ls);
 
-  bool probably_equals(const entity_addrvec_t& o) const {
-    if (o.v.size() != v.size()) {
-      return false;
+  bool legacy_equals(const entity_addrvec_t& o) const {
+    if (v == o.v) {
+      return true;
     }
+    if (v.size() == 1 &&
+	front().is_legacy() &&
+	front() == o.legacy_addr()) {
+      return true;
+    }
+    if (o.v.size() == 1 &&
+	o.front().is_legacy() &&
+	o.front() == legacy_addr()) {
+      return true;
+    }
+    return false;
+  }
+
+  bool probably_equals(const entity_addrvec_t& o) const {
     for (unsigned i = 0; i < v.size(); ++i) {
       if (!v[i].probably_equals(o.v[i])) {
 	return false;
@@ -671,13 +772,13 @@ struct entity_inst_t {
 WRITE_CLASS_ENCODER_FEATURES(entity_inst_t)
 
 
-inline bool operator==(const entity_inst_t& a, const entity_inst_t& b) { 
+inline bool operator==(const entity_inst_t& a, const entity_inst_t& b) {
   return a.name == b.name && a.addr == b.addr;
 }
-inline bool operator!=(const entity_inst_t& a, const entity_inst_t& b) { 
+inline bool operator!=(const entity_inst_t& a, const entity_inst_t& b) {
   return a.name != b.name || a.addr != b.addr;
 }
-inline bool operator<(const entity_inst_t& a, const entity_inst_t& b) { 
+inline bool operator<(const entity_inst_t& a, const entity_inst_t& b) {
   return a.name < b.name || (a.name == b.name && a.addr < b.addr);
 }
 inline bool operator<=(const entity_inst_t& a, const entity_inst_t& b) {

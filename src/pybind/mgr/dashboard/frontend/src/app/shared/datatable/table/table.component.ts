@@ -1,5 +1,6 @@
 import {
   AfterContentChecked,
+  ChangeDetectorRef,
   Component,
   EventEmitter,
   Input,
@@ -23,6 +24,7 @@ import { Observable, timer as observableTimer } from 'rxjs';
 
 import { CellTemplate } from '../../enum/cell-template.enum';
 import { CdTableColumn } from '../../models/cd-table-column';
+import { CdTableFetchDataContext } from '../../models/cd-table-fetch-data-context';
 import { CdTableSelection } from '../../models/cd-table-selection';
 import { CdUserConfig } from '../../models/cd-user-config';
 
@@ -32,51 +34,78 @@ import { CdUserConfig } from '../../models/cd-user-config';
   styleUrls: ['./table.component.scss']
 })
 export class TableComponent implements AfterContentChecked, OnInit, OnChanges, OnDestroy {
-  @ViewChild(DatatableComponent) table: DatatableComponent;
-  @ViewChild('tableCellBoldTpl') tableCellBoldTpl: TemplateRef<any>;
-  @ViewChild('sparklineTpl') sparklineTpl: TemplateRef<any>;
-  @ViewChild('routerLinkTpl') routerLinkTpl: TemplateRef<any>;
-  @ViewChild('checkIconTpl') checkIconTpl: TemplateRef<any>;
-  @ViewChild('perSecondTpl') perSecondTpl: TemplateRef<any>;
-  @ViewChild('executingTpl') executingTpl: TemplateRef<any>;
+  @ViewChild(DatatableComponent)
+  table: DatatableComponent;
+  @ViewChild('tableCellBoldTpl')
+  tableCellBoldTpl: TemplateRef<any>;
+  @ViewChild('sparklineTpl')
+  sparklineTpl: TemplateRef<any>;
+  @ViewChild('routerLinkTpl')
+  routerLinkTpl: TemplateRef<any>;
+  @ViewChild('checkIconTpl')
+  checkIconTpl: TemplateRef<any>;
+  @ViewChild('perSecondTpl')
+  perSecondTpl: TemplateRef<any>;
+  @ViewChild('executingTpl')
+  executingTpl: TemplateRef<any>;
+  @ViewChild('classAddingTpl')
+  classAddingTpl: TemplateRef<any>;
 
   // This is the array with the items to be shown.
-  @Input() data: any[];
+  @Input()
+  data: any[];
   // Each item -> { prop: 'attribute name', name: 'display name' }
-  @Input() columns: CdTableColumn[];
+  @Input()
+  columns: CdTableColumn[];
   // Each item -> { prop: 'attribute name', dir: 'asc'||'desc'}
-  @Input() sorts?: SortPropDir[];
+  @Input()
+  sorts?: SortPropDir[];
   // Method used for setting column widths.
-  @Input() columnMode? = 'flex';
+  @Input()
+  columnMode? = 'flex';
   // Display the tool header, including reload button, pagination and search fields?
-  @Input() toolHeader? = true;
+  @Input()
+  toolHeader? = true;
   // Display the table header?
-  @Input() header? = true;
+  @Input()
+  header? = true;
   // Display the table footer?
-  @Input() footer? = true;
+  @Input()
+  footer? = true;
   // Page size to show. Set to 0 to show unlimited number of rows.
-  @Input() limit? = 10;
+  @Input()
+  limit? = 10;
 
   /**
    * Auto reload time in ms - per default every 5s
    * You can set it to 0, undefined or false to disable the auto reload feature in order to
    * trigger 'fetchData' if the reload button is clicked.
    */
-  @Input() autoReload: any = 5000;
+  @Input()
+  autoReload: any = 5000;
 
   // Which row property is unique for a row. If the identifier is not specified in any
   // column, then the property name of the first column is used. Defaults to 'id'.
-  @Input() identifier = 'id';
+  @Input()
+  identifier = 'id';
   // If 'true', then the specified identifier is used anyway, although it is not specified
   // in any column. Defaults to 'false'.
-  @Input() forceIdentifier = false;
+  @Input()
+  forceIdentifier = false;
   // Allows other components to specify which type of selection they want,
   // e.g. 'single' or 'multi'.
-  @Input() selectionType: string = undefined;
-  // If `true` selected item details will be updated on table refresh
-  @Input() updateSelectionOnRefresh = true;
+  @Input()
+  selectionType: string = undefined;
+  // By default selected item details will be updated on table refresh, if data has changed
+  @Input()
+  updateSelectionOnRefresh: 'always' | 'never' | 'onChange' = 'onChange';
 
-  @Input() autoSave = true;
+  @Input()
+  autoSave = true;
+
+  // Only needed to set if the classAddingTpl is used
+  @Input()
+  customCss?: { [css: string]: number | string | ((any) => boolean) };
 
   /**
    * Should be a function to update the input data if undefined nothing will be triggered
@@ -87,7 +116,8 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
    * What happens:
    * The function is triggered through one table and all tables will update
    */
-  @Output() fetchData = new EventEmitter();
+  @Output()
+  fetchData = new EventEmitter();
 
   /**
    * This should be defined if you need access to the selection object.
@@ -97,7 +127,8 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
    *
    * @memberof TableComponent
    */
-  @Output() updateSelection = new EventEmitter();
+  @Output()
+  updateSelection = new EventEmitter();
 
   /**
    * Use this variable to access the selected row(s).
@@ -111,6 +142,7 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
   search = '';
   rows = [];
   loadingIndicator = true;
+  loadingError = false;
   paginationClasses = {
     pagerLeftArrow: 'i fa fa-angle-double-left',
     pagerRightArrow: 'i fa fa-angle-double-right',
@@ -128,7 +160,7 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
   // table columns after the browser window has been resized.
   private currentWidth: number;
 
-  constructor(private ngZone: NgZone) {}
+  constructor(private ngZone: NgZone, private cdRef: ChangeDetectorRef) {}
 
   ngOnInit() {
     this._addTemplates();
@@ -168,7 +200,7 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
     }
     if (_.isInteger(this.autoReload) && this.autoReload > 0) {
       this.ngZone.runOutsideAngular(() => {
-        this.reloadSubscriber = observableTimer(0, this.autoReload).subscribe((x) => {
+        this.reloadSubscriber = observableTimer(0, this.autoReload).subscribe(() => {
           this.ngZone.run(() => {
             return this.reloadData();
           });
@@ -286,9 +318,22 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
     this.cellTemplates.routerLink = this.routerLinkTpl;
     this.cellTemplates.perSecond = this.perSecondTpl;
     this.cellTemplates.executing = this.executingTpl;
+    this.cellTemplates.classAdding = this.classAddingTpl;
   }
 
-  ngOnChanges(changes) {
+  useCustomClass(value: any): string {
+    if (!this.customCss) {
+      throw new Error('Custom classes are not set!');
+    }
+    const classes = Object.keys(this.customCss);
+    const css = Object.values(this.customCss)
+      .map((v, i) => ((_.isFunction(v) && v(value)) || v === value) && classes[i])
+      .filter((x) => x)
+      .join(' ');
+    return _.isEmpty(css) ? undefined : css;
+  }
+
+  ngOnChanges() {
     this.useData();
   }
 
@@ -301,7 +346,19 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
 
   reloadData() {
     if (!this.updating) {
-      this.fetchData.emit();
+      this.loadingError = false;
+      const context = new CdTableFetchDataContext(() => {
+        // Do we have to display the error panel?
+        this.loadingError = context.errorConfig.displayError;
+        // Force data table to show no data?
+        if (context.errorConfig.resetData) {
+          this.data = [];
+        }
+        // Stop the loading indicator and reset the data table
+        // to the correct state.
+        this.useData();
+      });
+      this.fetchData.emit(context);
       this.updating = true;
     }
   }
@@ -329,11 +386,18 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
     if (this.search.length > 0) {
       this.updateFilter(true);
     }
+    this.reset();
+    this.updateSelected();
+  }
+
+  /**
+   * Reset the data table to correct state. This includes:
+   * - Disable loading indicator
+   * - Reset 'Updating' flag
+   */
+  reset() {
     this.loadingIndicator = false;
     this.updating = false;
-    if (this.updateSelectionOnRefresh) {
-      this.updateSelected();
-    }
   }
 
   /**
@@ -342,6 +406,9 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
    * or some selected items may have been removed.
    */
   updateSelected() {
+    if (this.updateSelectionOnRefresh === 'never') {
+      return;
+    }
     const newSelected = [];
     this.selection.selected.forEach((selectedItem) => {
       for (const row of this.data) {
@@ -350,6 +417,12 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
         }
       }
     });
+    if (
+      this.updateSelectionOnRefresh === 'onChange' &&
+      _.isEqual(this.selection.selected, newSelected)
+    ) {
+      return;
+    }
     this.selection.selected = newSelected;
     this.onSelect();
   }
@@ -379,6 +452,7 @@ export class TableComponent implements AfterContentChecked, OnInit, OnChanges, O
       this.table.onColumnSort({ sorts: this.userConfig.sorts });
     }
     this.table.recalculate();
+    this.cdRef.detectChanges();
   }
 
   createSortingDefinition(prop: TableColumnProp): SortPropDir[] {

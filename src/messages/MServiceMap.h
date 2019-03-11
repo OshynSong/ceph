@@ -6,20 +6,22 @@
 #include "msg/Message.h"
 #include "mgr/ServiceMap.h"
 
-class MServiceMap : public Message {
+class MServiceMap : public MessageInstance<MServiceMap> {
 public:
+  friend factory;
+
   ServiceMap service_map;
 
-  MServiceMap() : Message(MSG_SERVICE_MAP) { }
+  MServiceMap() : MessageInstance(MSG_SERVICE_MAP) { }
   explicit MServiceMap(const ServiceMap& sm)
-    : Message(MSG_SERVICE_MAP),
+    : MessageInstance(MSG_SERVICE_MAP),
       service_map(sm) {
   }
 private:
   ~MServiceMap() override {}
 
 public:
-  const char *get_type_name() const override { return "service_map"; }
+  std::string_view get_type_name() const override { return "service_map"; }
   void print(ostream& out) const override {
     out << "service_map(e" << service_map.epoch << " "
 	<< service_map.services.size() << " svc)";

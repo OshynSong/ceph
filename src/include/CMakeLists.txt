@@ -1,6 +1,8 @@
-install(FILES rados/librados.h
+install(FILES
+  rados/librados.h
   rados/rados_types.h
   rados/rados_types.hpp
+  rados/librados_fwd.hpp
   rados/librados.hpp
   buffer.h
   buffer_fwd.h
@@ -9,10 +11,12 @@ install(FILES rados/librados.h
   crc32c.h
   rados/objclass.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rados)
-install(FILES
-  radosstriper/libradosstriper.h
-  radosstriper/libradosstriper.hpp
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/radosstriper)
+if(WITH_LIBRADOSSTRIPER)
+  install(FILES
+    radosstriper/libradosstriper.h
+    radosstriper/libradosstriper.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/radosstriper)
+endif()
 
 if(WITH_RBD)
   install(FILES

@@ -26,6 +26,8 @@
 #include "mon/MgrMap.h"
 #include "mgr/PyModuleRunner.h"
 
+class Finisher;
+
 /**
  * State that is read by all modules running in standby mode
  */
@@ -46,7 +48,7 @@ public:
 
   void set_mgr_map(const MgrMap &mgr_map_)
   {
-    Mutex::Locker l(lock);
+    std::lock_guard l(lock);
 
     mgr_map = mgr_map_;
   }
@@ -58,14 +60,14 @@ public:
   template<typename Callback, typename...Args>
   void with_mgr_map(Callback&& cb, Args&&...args) const
   {
-    Mutex::Locker l(lock);
+    std::lock_guard l(lock);
     std::forward<Callback>(cb)(mgr_map, std::forward<Args>(args)...);
   }
 
   template<typename Callback, typename...Args>
   auto with_config(Callback&& cb, Args&&... args) const ->
     decltype(cb(module_config, std::forward<Args>(args)...)) {
-    Mutex::Locker l(lock);
+    std::lock_guard l(lock);
 
     return std::forward<Callback>(cb)(module_config, std::forward<Args>(args)...);
   }
@@ -105,15 +107,18 @@ private:
 
   LogChannelRef clog;
 
+  Finisher &finisher;
+
 public:
 
   StandbyPyModules(
       const MgrMap &mgr_map_,
       PyModuleConfig &module_config,
       LogChannelRef clog_,
-      MonClient &monc);
+      MonClient &monc,
+      Finisher &f);
 
-  int start_one(PyModuleRef py_module);
+  void start_one(PyModuleRef py_module);
 
   void shutdown();
 

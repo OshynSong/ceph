@@ -17,9 +17,12 @@
 
 #include "MOSDFastDispatchOp.h"
 
-class MOSDPGPush : public MOSDFastDispatchOp {
-  static const int HEAD_VERSION = 3;
-  static const int COMPAT_VERSION = 2;
+class MOSDPGPush : public MessageInstance<MOSDPGPush, MOSDFastDispatchOp> {
+public:
+  friend factory;
+private:
+  static constexpr int HEAD_VERSION = 3;
+  static constexpr int COMPAT_VERSION = 2;
 
 public:
   pg_shard_t from;
@@ -59,7 +62,7 @@ public:
   }
 
   MOSDPGPush()
-    : MOSDFastDispatchOp(MSG_OSD_PG_PUSH, HEAD_VERSION, COMPAT_VERSION),
+    : MessageInstance(MSG_OSD_PG_PUSH, HEAD_VERSION, COMPAT_VERSION),
       cost(0)
     {}
 
@@ -89,7 +92,7 @@ public:
     encode(min_epoch, payload);
   }
 
-  const char *get_type_name() const override { return "MOSDPGPush"; }
+  std::string_view get_type_name() const override { return "MOSDPGPush"; }
 
   void print(ostream& out) const override {
     out << "MOSDPGPush(" << pgid

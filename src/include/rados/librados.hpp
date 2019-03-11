@@ -4,12 +4,14 @@
 #include <string>
 #include <list>
 #include <map>
+#include <memory>
 #include <set>
 #include <vector>
 #include <utility>
 #include "buffer.h"
 
 #include "librados.h"
+#include "librados_fwd.hpp"
 #include "rados_types.hpp"
 
 namespace libradosstriper
@@ -17,37 +19,41 @@ namespace libradosstriper
   class RadosStriper;
 }
 
-namespace librados
-{
-  using ceph::bufferlist;
+namespace librados {
 
-  struct AioCompletionImpl;
+using ceph::bufferlist;
+
+struct AioCompletionImpl;
+struct IoCtxImpl;
+struct ListObjectImpl;
+class NObjectIteratorImpl;
+struct ObjListCtx;
+class ObjectOperationImpl;
+struct PlacementGroupImpl;
+struct PoolAsyncCompletionImpl;
+
+typedef struct rados_cluster_stat_t cluster_stat_t;
+typedef struct rados_pool_stat_t pool_stat_t;
+
+typedef void *list_ctx_t;
+typedef uint64_t auid_t;
+typedef void *config_t;
+
+typedef struct {
+  std::string client;
+  std::string cookie;
+  std::string address;
+} locker_t;
+
+typedef std::map<std::string, pool_stat_t> stats_map;
+
+typedef void *completion_t;
+typedef void (*callback_t)(completion_t cb, void *arg);
+
+inline namespace v14_2_0 {
+
   class IoCtx;
-  struct IoCtxImpl;
-  class ObjectOperationImpl;
-  struct ObjListCtx;
-  struct PoolAsyncCompletionImpl;
   class RadosClient;
-  struct ListObjectImpl;
-  class NObjectIteratorImpl;
-
-  typedef void *list_ctx_t;
-  typedef uint64_t auid_t;
-  typedef void *config_t;
-
-  typedef struct rados_cluster_stat_t cluster_stat_t;
-  typedef struct rados_pool_stat_t pool_stat_t;
-
-  typedef struct {
-    std::string client;
-    std::string cookie;
-    std::string address;
-  } locker_t;
-
-  typedef std::map<std::string, pool_stat_t> stats_map;
-
-  typedef void *completion_t;
-  typedef void (*callback_t)(completion_t cb, void *arg);
 
   class CEPH_RADOS_API ListObject
   {
@@ -63,7 +69,7 @@ namespace librados
   private:
     ListObject(ListObjectImpl *impl);
 
-    friend class NObjectIteratorImpl;
+    friend class librados::NObjectIteratorImpl;
     friend std::ostream& operator<<(std::ostream& out, const ListObject& lop);
 
     ListObjectImpl *impl;
@@ -85,7 +91,7 @@ namespace librados
     void set(rados_object_list_cursor c);
 
     friend class IoCtx;
-    friend class NObjectIteratorImpl;
+    friend class librados::NObjectIteratorImpl;
     friend std::ostream& operator<<(std::ostream& os, const librados::ObjectCursor& oc);
 
     std::string to_str() const;
@@ -108,18 +114,19 @@ namespace librados
     bool operator!=(const NObjectIterator& rhs) const;
     const ListObject& operator*() const;
     const ListObject* operator->() const;
-    NObjectIterator &operator++(); // Preincrement
-    NObjectIterator operator++(int); // Postincrement
+    NObjectIterator &operator++(); //< Preincrement; errors are thrown as exceptions
+    NObjectIterator operator++(int); //< Postincrement; errors are thrown as exceptions
     friend class IoCtx;
-    friend class NObjectIteratorImpl;
+    friend class librados::NObjectIteratorImpl;
 
     /// get current hash position of the iterator, rounded to the current pg
     uint32_t get_pg_hash_position() const;
 
-    /// move the iterator to a given hash position.  this may (will!) be rounded to the nearest pg.
+    /// move the iterator to a given hash position. this may (will!) be rounded
+    /// to the nearest pg. errors are thrown as exceptions
     uint32_t seek(uint32_t pos);
 
-    /// move the iterator to a given cursor position
+    /// move the iterator to a given cursor position. errors are thrown as exceptions
     uint32_t seek(const ObjectCursor& cursor);
 
     /// get current cursor position
@@ -301,7 +308,7 @@ namespace librados
     //flag mean ObjectOperationFlags
     void set_op_flags2(int flags);
 
-    void cmpext(uint64_t off, bufferlist& cmp_bl, int *prval);
+    void cmpext(uint64_t off, const bufferlist& cmp_bl, int *prval);
     void cmpxattr(const char *name, uint8_t op, const bufferlist& val);
     void cmpxattr(const char *name, uint8_t op, uint64_t v);
     void exec(const char *cls, const char *method, bufferlist& inbl);
@@ -315,7 +322,7 @@ namespace librados
     void assert_version(uint64_t ver);
 
     /**
-     * Guard operatation with a check that the object already exists
+     * Guard operation with a check that the object already exists
      */
     void assert_exists();
 
@@ -379,6 +386,7 @@ namespace librados
     void zero(uint64_t off, uint64_t len);
     void rmxattr(const char *name);
     void setxattr(const char *name, const bufferlist& bl);
+    void setxattr(const char *name, const bufferlist&& bl);
     void tmap_update(const bufferlist& cmdbl);
     void tmap_put(const bufferlist& bl);
     void selfmanaged_snap_rollback(uint64_t snapid);
@@ -431,9 +439,7 @@ namespace librados
      * @param src_fadvise_flags the fadvise flags for source object
      */
     void copy_from(const std::string& src, const IoCtx& src_ioctx,
-		   uint64_t src_version);
-    void copy_from2(const std::string& src, const IoCtx& src_ioctx,
-                    uint64_t src_version, uint32_t src_fadvise_flags);
+		   uint64_t src_version, uint32_t src_fadvise_flags);
 
     /**
      * undirty an object
@@ -504,7 +510,6 @@ namespace librados
      */
     void sparse_read(uint64_t off, uint64_t len, std::map<uint64_t,uint64_t> *m,
                     bufferlist *data_bl, int *prval);
-    void tmap_get(bufferlist *pbl, int *prval);
 
     /**
      * omap_get_vals: keys and values from the object omap
@@ -709,6 +714,8 @@ namespace librados
     static void from_rados_ioctx_t(rados_ioctx_t p, IoCtx &pool);
     IoCtx(const IoCtx& rhs);
     IoCtx& operator=(const IoCtx& rhs);
+    IoCtx(IoCtx&& rhs) noexcept;
+    IoCtx& operator=(IoCtx&& rhs) noexcept;
 
     ~IoCtx();
 
@@ -719,20 +726,23 @@ namespace librados
     void dup(const IoCtx& rhs);
 
     // set pool auid
-    int set_auid(uint64_t auid_);
+    int set_auid(uint64_t auid_)
+      __attribute__ ((deprecated));
 
     // set pool auid
-    int set_auid_async(uint64_t auid_, PoolAsyncCompletion *c);
+    int set_auid_async(uint64_t auid_, PoolAsyncCompletion *c)
+      __attribute__ ((deprecated));
 
     // get pool auid
-    int get_auid(uint64_t *auid_);
+    int get_auid(uint64_t *auid_)
+      __attribute__ ((deprecated));
 
     uint64_t get_instance_id() const;
 
     std::string get_pool_name();
 
     bool pool_requires_alignment();
-    int pool_requires_alignment2(bool * requires);
+    int pool_requires_alignment2(bool * req);
     uint64_t pool_required_alignment();
     int pool_required_alignment2(uint64_t * alignment);
 
@@ -785,14 +795,6 @@ namespace librados
      * NOTE: this call steals the contents of @param bl
      */
     int tmap_update(const std::string& oid, bufferlist& cmdbl);
-    /**
-     * replace object contents with provided encoded tmap data
-     *
-     * NOTE: this call steals the contents of @param bl
-     */
-    int tmap_put(const std::string& oid, bufferlist& bl);
-    int tmap_get(const std::string& oid, bufferlist& bl);
-    int tmap_to_omap(const std::string& oid, bool nullok=false);
 
     int omap_get_vals(const std::string& oid,
                       const std::string& start_after,
@@ -894,17 +896,16 @@ namespace librados
 		     std::list<librados::locker_t> *lockers);
 
 
-    /// Start enumerating objects for a pool
-    NObjectIterator nobjects_begin();
-    NObjectIterator nobjects_begin(const bufferlist &filter);
-    /// Start enumerating objects for a pool starting from a hash position
-    NObjectIterator nobjects_begin(uint32_t start_hash_position);
+    /// Start enumerating objects for a pool. Errors are thrown as exceptions.
+    NObjectIterator nobjects_begin(const bufferlist &filter=bufferlist());
+    /// Start enumerating objects for a pool starting from a hash position.
+    /// Errors are thrown as exceptions.
     NObjectIterator nobjects_begin(uint32_t start_hash_position,
-                                   const bufferlist &filter);
-    /// Start enumerating objects for a pool starting from cursor
-    NObjectIterator nobjects_begin(const librados::ObjectCursor& cursor);
+                                   const bufferlist &filter=bufferlist());
+    /// Start enumerating objects for a pool starting from cursor. Errors are
+    /// thrown as exceptions.
     NObjectIterator nobjects_begin(const librados::ObjectCursor& cursor,
-                                   const bufferlist &filter);
+                                   const bufferlist &filter=bufferlist());
     /// Iterator indicating the end of a pool
     const NObjectIterator& nobjects_end() const;
 
@@ -1029,7 +1030,7 @@ namespace librados
 		      size_t write_len, uint64_t off);
 
     /**
-     * Asychronously remove an object
+     * Asynchronously remove an object
      *
      * Queues the remove and returns.
      *
@@ -1285,7 +1286,6 @@ namespace librados
     IoCtxImpl *io_ctx_impl;
   };
 
-  struct PlacementGroupImpl;
   struct CEPH_RADOS_API PlacementGroup {
     PlacementGroup();
     PlacementGroup(const PlacementGroup&);
@@ -1330,11 +1330,17 @@ namespace librados
       std::map<std::string,std::string>&& status);
 
     int pool_create(const char *name);
-    int pool_create(const char *name, uint64_t auid);
-    int pool_create(const char *name, uint64_t auid, uint8_t crush_rule);
+    int pool_create(const char *name, uint64_t auid)
+      __attribute__ ((deprecated));
+    int pool_create(const char *name, uint64_t auid, uint8_t crush_rule)
+      __attribute__ ((deprecated));
+    int pool_create_with_rule(const char *name, uint8_t crush_rule);
     int pool_create_async(const char *name, PoolAsyncCompletion *c);
-    int pool_create_async(const char *name, uint64_t auid, PoolAsyncCompletion *c);
-    int pool_create_async(const char *name, uint64_t auid, uint8_t crush_rule, PoolAsyncCompletion *c);
+    int pool_create_async(const char *name, uint64_t auid, PoolAsyncCompletion *c)
+      __attribute__ ((deprecated));
+    int pool_create_async(const char *name, uint64_t auid, uint8_t crush_rule, PoolAsyncCompletion *c)
+      __attribute__ ((deprecated));
+    int pool_create_with_rule_async(const char *name, uint8_t crush_rule, PoolAsyncCompletion *c);
     int pool_get_base_tier(int64_t pool, int64_t* base_tier);
     int pool_delete(const char *name);
     int pool_delete_async(const char *name, PoolAsyncCompletion *c);
@@ -1343,6 +1349,7 @@ namespace librados
 
     uint64_t get_instance_id();
 
+    int get_min_compatible_osd(int8_t* require_osd_release);
     int get_min_compatible_client(int8_t* min_compat_client,
                                   int8_t* require_min_compat_client);
 
@@ -1450,7 +1457,9 @@ namespace librados
     const Rados& operator=(const Rados& rhs);
     RadosClient *client;
   };
-}
+
+} // namespace v14_2_0
+} // namespace librados
 
 #endif
 

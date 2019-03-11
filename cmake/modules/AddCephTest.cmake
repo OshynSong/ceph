@@ -20,7 +20,7 @@ function(add_ceph_test test_name test_path)
   # none of the tests should take more than 1 hour to complete
   set_property(TEST
     ${test_name}
-    PROPERTY TIMEOUT 3600)
+    PROPERTY TIMEOUT ${CEPH_TEST_TIMEOUT})
 endfunction()
 
 option(WITH_GTEST_PARALLEL "Enable running gtest based tests in parallel" OFF)
@@ -35,7 +35,7 @@ if(WITH_GTEST_PARALLEL)
     BUILD_COMMAND ""
     INSTALL_COMMAND "")
   add_dependencies(tests gtest-parallel_ext)
-  find_package(PythonInterp 2.7 REQUIRED)
+  find_package(PythonInterp REQUIRED)
   set(GTEST_PARALLEL_COMMAND
     ${PYTHON_EXECUTABLE} ${gtest_parallel_source_dir}/gtest-parallel)
 endif()
@@ -49,5 +49,4 @@ function(add_ceph_unittest unittest_name)
   endif()
   add_ceph_test(${unittest_name} "${UNITTEST}")
   target_link_libraries(${unittest_name} ${UNITTEST_LIBS})
-  set_target_properties(${unittest_name} PROPERTIES COMPILE_FLAGS ${UNITTEST_CXX_FLAGS})
 endfunction()

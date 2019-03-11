@@ -4,9 +4,11 @@
 #include "librbd/io/ImageRequestWQ.h"
 #include "common/errno.h"
 #include "common/zipkin_trace.h"
+#include "common/Cond.h"
 #include "librbd/ExclusiveLock.h"
 #include "librbd/ImageCtx.h"
 #include "librbd/ImageState.h"
+#include "librbd/ImageWatcher.h"
 #include "librbd/internal.h"
 #include "librbd/Utils.h"
 #include "librbd/exclusive_lock/Policy.h"
@@ -77,13 +79,13 @@ struct ImageRequestWQ<I>::C_RefreshFinish : public Context {
   }
 };
 
-static std::list<uint64_t> throttle_flags = {
-  RBD_QOS_IOPS_THROTTLE,
-  RBD_QOS_BPS_THROTTLE,
-  RBD_QOS_READ_IOPS_THROTTLE,
-  RBD_QOS_WRITE_IOPS_THROTTLE,
-  RBD_QOS_READ_BPS_THROTTLE,
-  RBD_QOS_WRITE_BPS_THROTTLE
+static std::map<uint64_t, std::string> throttle_flags = {
+  { RBD_QOS_IOPS_THROTTLE,       "rbd_qos_iops_throttle"       },
+  { RBD_QOS_BPS_THROTTLE,        "rbd_qos_bps_throttle"        },
+  { RBD_QOS_READ_IOPS_THROTTLE,  "rbd_qos_read_iops_throttle"  },
+  { RBD_QOS_WRITE_IOPS_THROTTLE, "rbd_qos_write_iops_throttle" },
+  { RBD_QOS_READ_BPS_THROTTLE,   "rbd_qos_read_bps_throttle"   },
+  { RBD_QOS_WRITE_BPS_THROTTLE,  "rbd_qos_write_bps_throttle"  }
 };
 
 template <typename I>
@@ -101,7 +103,8 @@ ImageRequestWQ<I>::ImageRequestWQ(I *image_ctx, const string &name,
 
   for (auto flag : throttle_flags) {
     m_throttles.push_back(make_pair(
-	  flag, new TokenBucketThrottle(cct, 0, 0, timer, timer_lock)));
+      flag.first,
+      new TokenBucketThrottle(cct, flag.second, 0, 0, timer, timer_lock)));
   }
 
   this->register_work_queue();
@@ -155,7 +158,7 @@ ssize_t ImageRequestWQ<I>::write(uint64_t off, uint64_t len,
 
 template <typename I>
 ssize_t ImageRequestWQ<I>::discard(uint64_t off, uint64_t len,
-				   bool skip_partial_discard) {
+				   uint32_t discard_granularity_bytes) {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 20) << "ictx=" << &m_image_ctx << ", off=" << off << ", "
                  << "len = " << len << dendl;
@@ -170,7 +173,7 @@ ssize_t ImageRequestWQ<I>::discard(uint64_t off, uint64_t len,
 
   C_SaferCond cond;
   AioCompletion *c = AioCompletion::create(&cond);
-  aio_discard(c, off, len, skip_partial_discard, false);
+  aio_discard(c, off, len, discard_granularity_bytes, false);
 
   r = cond.wait();
   if (r < 0) {
@@ -335,7 +338,8 @@ void ImageRequestWQ<I>::aio_write(AioCompletion *c, uint64_t off, uint64_t len,
 
 template <typename I>
 void ImageRequestWQ<I>::aio_discard(AioCompletion *c, uint64_t off,
-				    uint64_t len, bool skip_partial_discard,
+				    uint64_t len,
+                                    uint32_t discard_granularity_bytes,
 				    bool native_async) {
   CephContext *cct = m_image_ctx.cct;
   FUNCTRACE(cct);
@@ -361,11 +365,11 @@ void ImageRequestWQ<I>::aio_discard(AioCompletion *c, uint64_t off,
   RWLock::RLocker owner_locker(m_image_ctx.owner_lock);
   if (m_image_ctx.non_blocking_aio || writes_blocked()) {
     queue(ImageDispatchSpec<I>::create_discard_request(
-            m_image_ctx, c, off, len, skip_partial_discard, trace));
+            m_image_ctx, c, off, len, discard_granularity_bytes, trace));
   } else {
     c->start_op();
     ImageRequest<I>::aio_discard(&m_image_ctx, c, {{off, len}},
-				 skip_partial_discard, trace);
+                                 discard_granularity_bytes, trace);
     finish_in_flight_io();
   }
   trace.event("finish");
@@ -488,11 +492,11 @@ void ImageRequestWQ<I>::aio_compare_and_write(AioCompletion *c,
 
 template <typename I>
 void ImageRequestWQ<I>::shut_down(Context *on_shutdown) {
-  assert(m_image_ctx.owner_lock.is_locked());
+  ceph_assert(m_image_ctx.owner_lock.is_locked());
 
   {
     RWLock::WLocker locker(m_lock);
-    assert(!m_shutdown);
+    ceph_assert(!m_shutdown);
     m_shutdown = true;
 
     CephContext *cct = m_image_ctx.cct;
@@ -517,7 +521,7 @@ int ImageRequestWQ<I>::block_writes() {
 
 template <typename I>
 void ImageRequestWQ<I>::block_writes(Context *on_blocked) {
-  assert(m_image_ctx.owner_lock.is_locked());
+  ceph_assert(m_image_ctx.owner_lock.is_locked());
   CephContext *cct = m_image_ctx.cct;
 
   {
@@ -540,21 +544,44 @@ void ImageRequestWQ<I>::unblock_writes() {
   CephContext *cct = m_image_ctx.cct;
 
   bool wake_up = false;
+  Contexts waiter_contexts;
   {
     RWLock::WLocker locker(m_lock);
-    assert(m_write_blockers > 0);
+    ceph_assert(m_write_blockers > 0);
     --m_write_blockers;
 
     ldout(cct, 5) << &m_image_ctx << ", " << "num="
                   << m_write_blockers << dendl;
     if (m_write_blockers == 0) {
       wake_up = true;
+      std::swap(waiter_contexts, m_unblocked_write_waiter_contexts);
     }
   }
 
   if (wake_up) {
+    for (auto ctx : waiter_contexts) {
+      ctx->complete(0);
+    }
     this->signal();
   }
+}
+
+template <typename I>
+void ImageRequestWQ<I>::wait_on_writes_unblocked(Context *on_unblocked) {
+  ceph_assert(m_image_ctx.owner_lock.is_locked());
+  CephContext *cct = m_image_ctx.cct;
+
+  {
+    RWLock::WLocker locker(m_lock);
+    ldout(cct, 20) << &m_image_ctx << ", " << "write_blockers="
+                   << m_write_blockers << dendl;
+    if (!m_unblocked_write_waiter_contexts.empty() || m_write_blockers > 0) {
+      m_unblocked_write_waiter_contexts.push_back(on_unblocked);
+      return;
+    }
+  }
+
+  on_unblocked->complete(0);
 }
 
 template <typename I>
@@ -591,7 +618,17 @@ void ImageRequestWQ<I>::set_require_lock(Direction direction, bool enabled) {
 }
 
 template <typename I>
-void ImageRequestWQ<I>::apply_qos_limit(uint64_t limit, const uint64_t flag) {
+void ImageRequestWQ<I>::apply_qos_schedule_tick_min(uint64_t tick){
+  for (auto pair : m_throttles) {
+    pair.second->set_schedule_tick_min(tick);
+  }
+}
+
+template <typename I>
+void ImageRequestWQ<I>::apply_qos_limit(const uint64_t flag,
+                                        uint64_t limit,
+                                        uint64_t burst) {
+  CephContext *cct = m_image_ctx.cct;
   TokenBucketThrottle *throttle = nullptr;
   for (auto pair : m_throttles) {
     if (flag == pair.first) {
@@ -599,9 +636,17 @@ void ImageRequestWQ<I>::apply_qos_limit(uint64_t limit, const uint64_t flag) {
       break;
     }
   }
-  assert(throttle != nullptr);
-  throttle->set_max(limit);
-  throttle->set_average(limit);
+  ceph_assert(throttle != nullptr);
+
+  int r = throttle->set_limit(limit, burst);
+  if (r < 0) {
+    lderr(cct) << throttle->get_name() << ": invalid qos parameter: "
+               << "burst(" << burst << ") is less than "
+               << "limit(" << limit << ")" << dendl;
+    // if apply failed, we should at least make sure the limit works.
+    throttle->set_limit(limit, 0);
+  }
+
   if (limit)
     m_qos_enabled_flag |= flag;
   else
@@ -613,7 +658,7 @@ void ImageRequestWQ<I>::handle_throttle_ready(int r, ImageDispatchSpec<I> *item,
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 15) << "r=" << r << ", " << "req=" << item << dendl;
 
-  assert(m_io_throttled.load() > 0);
+  ceph_assert(m_io_throttled.load() > 0);
   item->set_throttled(flag);
   if (item->were_all_throttled()) {
     this->requeue(item);
@@ -693,16 +738,17 @@ void *ImageRequestWQ<I>::_void_dequeue() {
 
   auto item = reinterpret_cast<ImageDispatchSpec<I> *>(
     ThreadPool::PointerWQ<ImageDispatchSpec<I> >::_void_dequeue());
-  assert(peek_item == item);
+  ceph_assert(peek_item == item);
 
   if (lock_required) {
-    this->get_pool_lock().Unlock();
+    this->get_pool_lock().unlock();
     m_image_ctx.owner_lock.get_read();
     if (m_image_ctx.exclusive_lock != nullptr) {
       ldout(cct, 5) << "exclusive lock required: delaying IO " << item << dendl;
       if (!m_image_ctx.get_exclusive_lock_policy()->may_auto_request_lock()) {
         lderr(cct) << "op requires exclusive lock" << dendl;
-        fail_in_flight_io(-EROFS, item);
+        fail_in_flight_io(m_image_ctx.exclusive_lock->get_unlocked_op_error(),
+                          item);
 
         // wake up the IO since we won't be returning a request to process
         this->signal();
@@ -716,7 +762,7 @@ void *ImageRequestWQ<I>::_void_dequeue() {
       lock_required = false;
     }
     m_image_ctx.owner_lock.put_read();
-    this->get_pool_lock().Lock();
+    this->get_pool_lock().lock();
 
     if (lock_required) {
       return nullptr;
@@ -729,9 +775,9 @@ void *ImageRequestWQ<I>::_void_dequeue() {
     // stall IO until the refresh completes
     ++m_io_blockers;
 
-    this->get_pool_lock().Unlock();
+    this->get_pool_lock().unlock();
     m_image_ctx.state->refresh(new C_RefreshFinish(this, item));
-    this->get_pool_lock().Lock();
+    this->get_pool_lock().lock();
     return nullptr;
   }
 
@@ -760,10 +806,10 @@ template <typename I>
 void ImageRequestWQ<I>::finish_queued_io(ImageDispatchSpec<I> *req) {
   RWLock::RLocker locker(m_lock);
   if (req->is_write_op()) {
-    assert(m_queued_writes > 0);
+    ceph_assert(m_queued_writes > 0);
     m_queued_writes--;
   } else {
-    assert(m_queued_reads > 0);
+    ceph_assert(m_queued_reads > 0);
     m_queued_reads--;
   }
 }
@@ -773,7 +819,7 @@ void ImageRequestWQ<I>::finish_in_flight_write() {
   bool writes_blocked = false;
   {
     RWLock::RLocker locker(m_lock);
-    assert(m_in_flight_writes > 0);
+    ceph_assert(m_in_flight_writes > 0);
     if (--m_in_flight_writes == 0 &&
         !m_write_blocker_contexts.empty()) {
       writes_blocked = true;
@@ -816,7 +862,7 @@ void ImageRequestWQ<I>::finish_in_flight_io() {
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 5) << "completing shut down" << dendl;
 
-  assert(on_shutdown != nullptr);
+  ceph_assert(on_shutdown != nullptr);
   flush_image(m_image_ctx, on_shutdown);
 }
 
@@ -832,14 +878,14 @@ void ImageRequestWQ<I>::fail_in_flight_io(
 
 template <typename I>
 bool ImageRequestWQ<I>::is_lock_required(bool write_op) const {
-  assert(m_lock.is_locked());
+  ceph_assert(m_lock.is_locked());
   return ((write_op && m_require_lock_on_write) ||
           (!write_op && m_require_lock_on_read));
 }
 
 template <typename I>
 void ImageRequestWQ<I>::queue(ImageDispatchSpec<I> *req) {
-  assert(m_image_ctx.owner_lock.is_locked());
+  ceph_assert(m_image_ctx.owner_lock.is_locked());
 
   CephContext *cct = m_image_ctx.cct;
   ldout(cct, 20) << "ictx=" << &m_image_ctx << ", "
@@ -868,7 +914,7 @@ void ImageRequestWQ<I>::handle_acquire_lock(
     this->requeue(req);
   }
 
-  assert(m_io_blockers.load() > 0);
+  ceph_assert(m_io_blockers.load() > 0);
   --m_io_blockers;
   this->signal();
 }
@@ -887,7 +933,7 @@ void ImageRequestWQ<I>::handle_refreshed(
     this->requeue(req);
   }
 
-  assert(m_io_blockers.load() > 0);
+  ceph_assert(m_io_blockers.load() > 0);
   --m_io_blockers;
   this->signal();
 }

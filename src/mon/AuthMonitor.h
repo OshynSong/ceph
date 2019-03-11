@@ -24,9 +24,7 @@
 #include "mon/PaxosService.h"
 #include "mon/MonitorDBStore.h"
 
-class MMonCommand;
 struct MAuth;
-struct MMonGlobalID;
 class KeyRing;
 class Monitor;
 
@@ -48,19 +46,6 @@ public:
 
     void encode(bufferlist& bl, uint64_t features=-1) const {
       using ceph::encode;
-      if ((features & CEPH_FEATURE_MONENC) == 0) {
-	__u8 v = 1;
-	encode(v, bl);
-	__u32 _type = (__u32)inc_type;
-	encode(_type, bl);
-	if (_type == GLOBAL_ID) {
-	  encode(max_global_id, bl);
-	} else {
-	  encode(auth_type, bl);
-	  encode(auth_data, bl);
-	}
-	return;
-      } 
       ENCODE_START(2, 2, bl);
       __u32 _type = (__u32)inc_type;
       encode(_type, bl);
@@ -77,7 +62,7 @@ public:
       __u32 _type;
       decode(_type, bl);
       inc_type = (IncType)_type;
-      assert(inc_type >= GLOBAL_ID && inc_type <= AUTH_DATA);
+      ceph_assert(inc_type >= GLOBAL_ID && inc_type <= AUTH_DATA);
       if (_type == GLOBAL_ID) {
 	decode(max_global_id, bl);
       } else {
@@ -116,6 +101,9 @@ private:
   uint64_t max_global_id;
   uint64_t last_allocated_id;
 
+  // these are protected by mon->auth_lock
+  int mon_num = 0, mon_rank = 0;
+
   bool _upgrade_format_to_dumpling();
   bool _upgrade_format_to_luminous();
   bool _upgrade_format_to_mimic();
@@ -134,6 +122,17 @@ private:
 
   /* validate mon/osd/mds caps; fail on unrecognized service/type */
   bool valid_caps(const string& type, const string& caps, ostream *out);
+  bool valid_caps(const string& type, const bufferlist& bl, ostream *out) {
+    auto p = bl.begin();
+    string v;
+    try {
+      decode(v, p);
+    } catch (buffer::error& e) {
+      *out << "corrupt capability encoding";
+      return false;
+    }
+    return valid_caps(type, v, out);
+  }
   bool valid_caps(const vector<string>& caps, ostream *out);
 
   void on_active() override;
@@ -144,8 +143,14 @@ private:
   void update_from_paxos(bool *need_bootstrap) override;
   void create_pending() override;  // prepare a new pending
   bool prepare_global_id(MonOpRequestRef op);
+  bool _should_increase_max_global_id(); ///< called under mon->auth_lock
   void increase_max_global_id();
-  uint64_t assign_global_id(MonOpRequestRef op, bool should_increase_max);
+  uint64_t assign_global_id(bool should_increase_max);
+public:
+  uint64_t _assign_global_id(); ///< called under mon->auth_lock
+  void _set_mon_num_rank(int num, int rank); ///< called under mon->auth_lock
+
+private:
   // propose pending update to peers
   void encode_pending(MonitorDBStore::TransactionRef t) override;
   void encode_full(MonitorDBStore::TransactionRef t) override;

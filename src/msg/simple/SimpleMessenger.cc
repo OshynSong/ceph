@@ -30,7 +30,7 @@
 #undef dout_prefix
 #define dout_prefix _prefix(_dout, this)
 static ostream& _prefix(std::ostream *_dout, SimpleMessenger *msgr) {
-  return *_dout << "-- " << msgr->get_myaddr() << " ";
+  return *_dout << "-- " << msgr->get_myaddr_legacy() << " ";
 }
 
 
@@ -63,14 +63,14 @@ SimpleMessenger::SimpleMessenger(CephContext *cct, entity_name_t name,
  */
 SimpleMessenger::~SimpleMessenger()
 {
-  assert(!did_bind); // either we didn't bind or we shut down the Accepter
-  assert(rank_pipe.empty()); // we don't have any running Pipes.
-  assert(!reaper_started); // the reaper thread is stopped
+  ceph_assert(!did_bind); // either we didn't bind or we shut down the Accepter
+  ceph_assert(rank_pipe.empty()); // we don't have any running Pipes.
+  ceph_assert(!reaper_started); // the reaper thread is stopped
 }
 
 void SimpleMessenger::ready()
 {
-  ldout(cct,10) << "ready " << get_myaddr() << dendl;
+  ldout(cct,10) << "ready " << get_myaddr_legacy() << dendl;
   dispatch_queue.start();
 
   lock.Lock();
@@ -82,7 +82,7 @@ void SimpleMessenger::ready()
 
 int SimpleMessenger::shutdown()
 {
-  ldout(cct,10) << "shutdown " << get_myaddr() << dendl;
+  ldout(cct,10) << "shutdown " << get_myaddr_legacy() << dendl;
   mark_down_all();
 
   // break ref cycles on the loopback connection
@@ -150,8 +150,8 @@ int SimpleMessenger::_send_message(Message *m, Connection *con)
 bool SimpleMessenger::set_addr_unknowns(const entity_addrvec_t &addrs)
 {
   bool ret = false;
-  auto addr = addrs.legacy_addr();
-  assert(my_addr == my_addrs->front());
+  auto addr = addrs.front();
+  ceph_assert(my_addr == my_addrs->front());
   if (my_addr.is_blank_ip()) {
     ldout(cct,1) << __func__ << " " << addr << dendl;
     entity_addr_t t = my_addr;
@@ -164,7 +164,7 @@ bool SimpleMessenger::set_addr_unknowns(const entity_addrvec_t &addrs)
   } else {
     ldout(cct,1) << __func__ << " " << addr << " no-op" << dendl;
   }
-  assert(my_addr == my_addrs->front());
+  ceph_assert(my_addr == my_addrs->front());
   return ret;
 }
 
@@ -243,7 +243,7 @@ void SimpleMessenger::reaper_entry()
 void SimpleMessenger::reaper()
 {
   ldout(cct,10) << "reaper" << dendl;
-  assert(lock.is_locked());
+  ceph_assert(lock.is_locked());
 
   while (!pipe_reap_queue.empty()) {
     Pipe *p = pipe_reap_queue.front();
@@ -257,11 +257,11 @@ void SimpleMessenger::reaper()
       // or accept() may have switch the Connection to a different
       // Pipe... but make sure!
       bool cleared = p->connection_state->clear_pipe(p);
-      assert(!cleared);
+      ceph_assert(!cleared);
     }
     p->pipe_lock.Unlock();
     p->unregister_pipe();
-    assert(pipes.count(p));
+    ceph_assert(pipes.count(p));
     pipes.erase(p);
 
     // drop msgr lock while joining thread; the delay through could be
@@ -295,7 +295,7 @@ bool SimpleMessenger::is_connected(Connection *con)
   if (con) {
     Pipe *p = static_cast<Pipe *>(static_cast<PipeConnection*>(con)->get_pipe());
     if (p) {
-      assert(p->msgr == this);
+      ceph_assert(p->msgr == this);
       r = p->is_connected();
       p->put();
     }
@@ -325,7 +325,7 @@ int SimpleMessenger::bind(const entity_addr_t &bind_addr)
 int SimpleMessenger::rebind(const set<int>& avoid_ports)
 {
   ldout(cct,1) << "rebind avoid " << avoid_ports << dendl;
-  assert(did_bind);
+  ceph_assert(did_bind);
   accepter.stop();
   mark_down_all();
   return accepter.rebind(avoid_ports);
@@ -338,7 +338,7 @@ int SimpleMessenger::client_bind(const entity_addr_t &bind_addr)
     return 0;
   Mutex::Locker l(lock);
   if (did_bind) {
-    assert(*my_addrs == entity_addrvec_t(bind_addr));
+    ceph_assert(*my_addrs == entity_addrvec_t(bind_addr));
     return 0;
   }
   if (started) {
@@ -358,9 +358,9 @@ int SimpleMessenger::start()
   ldout(cct,1) << "messenger.start" << dendl;
 
   // register at least one entity, first!
-  assert(my_name.type() >= 0);
+  ceph_assert(my_name.type() >= 0);
 
-  assert(!started);
+  ceph_assert(!started);
   started = true;
   stopped = false;
 
@@ -398,8 +398,8 @@ Pipe *SimpleMessenger::connect_rank(const entity_addr_t& addr,
 				    PipeConnection *con,
 				    Message *first)
 {
-  assert(lock.is_locked());
-  assert(addr != my_addr);
+  ceph_assert(lock.is_locked());
+  ceph_assert(addr != my_addr);
   
   ldout(cct,10) << "connect_rank to " << addr << ", creating pipe and registering" << dendl;
   
@@ -425,37 +425,23 @@ Pipe *SimpleMessenger::connect_rank(const entity_addr_t& addr,
 
 
 
-AuthAuthorizer *SimpleMessenger::get_authorizer(int peer_type, bool force_new)
-{
-  return ms_deliver_get_authorizer(peer_type, force_new);
-}
-
-bool SimpleMessenger::verify_authorizer(Connection *con, int peer_type,
-					int protocol, bufferlist& authorizer, bufferlist& authorizer_reply,
-					bool& isvalid,CryptoKey& session_key,
-					std::unique_ptr<AuthAuthorizerChallenge> *challenge)
-{
-  return ms_deliver_verify_authorizer(con, peer_type, protocol, authorizer, authorizer_reply,
-				      isvalid, session_key,
-				      challenge);
-}
-
-ConnectionRef SimpleMessenger::get_connection(const entity_inst_t& dest)
+ConnectionRef SimpleMessenger::connect_to(int type,
+					  const entity_addrvec_t& addrs)
 {
   Mutex::Locker l(lock);
-  if (my_addr == dest.addr) {
+  if (my_addr == addrs.front()) {
     // local
     return local_connection;
   }
 
   // remote
   while (true) {
-    Pipe *pipe = _lookup_pipe(dest.addr);
+    Pipe *pipe = _lookup_pipe(addrs.legacy_addr());
     if (pipe) {
-      ldout(cct, 10) << "get_connection " << dest << " existing " << pipe << dendl;
+      ldout(cct, 10) << "get_connection " << addrs << " existing " << pipe << dendl;
     } else {
-      pipe = connect_rank(dest.addr, dest.name.type(), NULL, NULL);
-      ldout(cct, 10) << "get_connection " << dest << " new " << pipe << dendl;
+      pipe = connect_rank(addrs.legacy_addr(), type, NULL, NULL);
+      ldout(cct, 10) << "get_connection " << addrs << " new " << pipe << dendl;
     }
     Mutex::Locker l(pipe->pipe_lock);
     if (pipe->connection_state)
@@ -559,7 +545,7 @@ int SimpleMessenger::send_keepalive(Connection *con)
     static_cast<PipeConnection*>(con)->get_pipe());
   if (pipe) {
     ldout(cct,20) << "send_keepalive con " << con << ", have pipe." << dendl;
-    assert(pipe->msgr == this);
+    ceph_assert(pipe->msgr == this);
     pipe->pipe_lock.Lock();
     pipe->_send_keepalive();
     pipe->pipe_lock.Unlock();
@@ -708,7 +694,7 @@ void SimpleMessenger::mark_down(Connection *con)
   Pipe *p = static_cast<Pipe *>(static_cast<PipeConnection*>(con)->get_pipe());
   if (p) {
     ldout(cct,1) << "mark_down " << con << " -- " << p << dendl;
-    assert(p->msgr == this);
+    ceph_assert(p->msgr == this);
     p->unregister_pipe();
     p->pipe_lock.Lock();
     p->stop();
@@ -731,7 +717,7 @@ void SimpleMessenger::mark_disposable(Connection *con)
   Pipe *p = static_cast<Pipe *>(static_cast<PipeConnection*>(con)->get_pipe());
   if (p) {
     ldout(cct,1) << "mark_disposable " << con << " -- " << p << dendl;
-    assert(p->msgr == this);
+    ceph_assert(p->msgr == this);
     p->pipe_lock.Lock();
     p->policy.lossy = true;
     p->pipe_lock.Unlock();
@@ -754,9 +740,15 @@ void SimpleMessenger::learned_addr(const entity_addr_t &peer_addr_for_me)
     return;
 
   lock.Lock();
-  if (need_addr) {
+  if (need_addr && my_addr.is_blank_ip()) {
     entity_addr_t t = peer_addr_for_me;
-    t.set_port(my_addr.get_port());
+    if (!did_bind) {
+      t.set_type(entity_addr_t::TYPE_ANY);
+      t.set_port(0);
+    } else {
+      t.set_type(entity_addr_t::TYPE_LEGACY);
+      t.set_port(my_addr.get_port());
+    }
     t.set_nonce(my_addr.get_nonce());
     ANNOTATE_BENIGN_RACE_SIZED(&my_addr, sizeof(my_addr),
                                "SimpleMessenger learned addr");

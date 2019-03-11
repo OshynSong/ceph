@@ -3,9 +3,11 @@ import { FormsModule } from '@angular/forms';
 import { RouterTestingModule } from '@angular/router/testing';
 
 import { NgxDatatableModule } from '@swimlane/ngx-datatable';
+import * as _ from 'lodash';
 
+import { configureTestBed } from '../../../../testing/unit-test-helper';
 import { ComponentsModule } from '../../components/components.module';
-import { configureTestBed } from '../../unit-test-helper';
+import { CdTableFetchDataContext } from '../../models/cd-table-fetch-data-context';
 import { TableComponent } from './table.component';
 
 describe('TableComponent', () => {
@@ -18,7 +20,7 @@ describe('TableComponent', () => {
       data.push({
         a: i,
         b: i * i,
-        c: [-(i % 10), 'score' + (i % 16 + 6)],
+        c: [-(i % 10), 'score' + ((i % 16) + 6)],
         d: !(i % 2)
       });
     }
@@ -123,7 +125,7 @@ describe('TableComponent', () => {
 
       it('should test search manipulation', () => {
         let searchTerms = [];
-        spyOn(component, 'subSearch').and.callFake((d, search, c) => {
+        spyOn(component, 'subSearch').and.callFake((_d, search) => {
           expect(search).toEqual(searchTerms);
         });
         const searchTest = (s: string, st: string[]) => {
@@ -243,6 +245,125 @@ describe('TableComponent', () => {
 
     afterEach(() => {
       clearLocalStorage();
+    });
+  });
+
+  describe('reload data', () => {
+    beforeEach(() => {
+      component.ngOnInit();
+      component.data = [];
+      component['updating'] = false;
+    });
+
+    it('should call fetchData callback function', () => {
+      component.fetchData.subscribe((context) => {
+        expect(context instanceof CdTableFetchDataContext).toBeTruthy();
+      });
+      component.reloadData();
+    });
+
+    it('should call error function', () => {
+      component.data = createFakeData(5);
+      component.fetchData.subscribe((context) => {
+        context.error();
+        expect(component.loadingError).toBeTruthy();
+        expect(component.data.length).toBe(0);
+        expect(component.loadingIndicator).toBeFalsy();
+        expect(component['updating']).toBeFalsy();
+      });
+      component.reloadData();
+    });
+
+    it('should call error function with custom config', () => {
+      component.data = createFakeData(10);
+      component.fetchData.subscribe((context) => {
+        context.errorConfig.resetData = false;
+        context.errorConfig.displayError = false;
+        context.error();
+        expect(component.loadingError).toBeFalsy();
+        expect(component.data.length).toBe(10);
+        expect(component.loadingIndicator).toBeFalsy();
+        expect(component['updating']).toBeFalsy();
+      });
+      component.reloadData();
+    });
+
+    it('should update selection on refresh - "onChange"', () => {
+      spyOn(component, 'onSelect').and.callThrough();
+      component.data = createFakeData(10);
+      component.selection.selected = [_.clone(component.data[1])];
+      component.updateSelectionOnRefresh = 'onChange';
+      component.updateSelected();
+      expect(component.onSelect).toHaveBeenCalledTimes(0);
+      component.data[1].d = !component.data[1].d;
+      component.updateSelected();
+      expect(component.onSelect).toHaveBeenCalled();
+    });
+
+    it('should update selection on refresh - "always"', () => {
+      spyOn(component, 'onSelect').and.callThrough();
+      component.data = createFakeData(10);
+      component.selection.selected = [_.clone(component.data[1])];
+      component.updateSelectionOnRefresh = 'always';
+      component.updateSelected();
+      expect(component.onSelect).toHaveBeenCalled();
+      component.data[1].d = !component.data[1].d;
+      component.updateSelected();
+      expect(component.onSelect).toHaveBeenCalled();
+    });
+
+    it('should update selection on refresh - "never"', () => {
+      spyOn(component, 'onSelect').and.callThrough();
+      component.data = createFakeData(10);
+      component.selection.selected = [_.clone(component.data[1])];
+      component.updateSelectionOnRefresh = 'never';
+      component.updateSelected();
+      expect(component.onSelect).toHaveBeenCalledTimes(0);
+      component.data[1].d = !component.data[1].d;
+      component.updateSelected();
+      expect(component.onSelect).toHaveBeenCalledTimes(0);
+    });
+
+    afterEach(() => {
+      clearLocalStorage();
+    });
+  });
+
+  describe('useCustomClass', () => {
+    beforeEach(() => {
+      component.customCss = {
+        'label label-danger': 'active',
+        'secret secret-number': 123.456,
+        'btn btn-sm': (v) => _.isString(v) && v.startsWith('http'),
+        secure: (v) => _.isString(v) && v.startsWith('https')
+      };
+    });
+
+    it('should throw an error if custom classes are not set', () => {
+      component.customCss = undefined;
+      expect(() => component.useCustomClass('active')).toThrowError('Custom classes are not set!');
+    });
+
+    it('should not return any class', () => {
+      ['', 'something', 123, { complex: 1 }, [1, 2, 3]].forEach((value) =>
+        expect(component.useCustomClass(value)).toBe(undefined)
+      );
+    });
+
+    it('should match a string and return the corresponding class', () => {
+      expect(component.useCustomClass('active')).toBe('label label-danger');
+    });
+
+    it('should match a number and return the corresponding class', () => {
+      expect(component.useCustomClass(123.456)).toBe('secret secret-number');
+    });
+
+    it('should match against a function and return the corresponding class', () => {
+      expect(component.useCustomClass('http://no.ssl')).toBe('btn btn-sm');
+    });
+
+    it('should match against multiple functions and return the corresponding classes', () => {
+      expect(component.useCustomClass('https://secure.it')).toBe('btn btn-sm secure');
     });
   });
 });

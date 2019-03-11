@@ -21,6 +21,10 @@
 #include <sys/param.h>
 #endif
 
+#ifdef HAVE_SYS_VFS_H
+#include <sys/vfs.h>
+#endif
+
 #include <iostream>
 #include <string>
 #include <map>
@@ -31,7 +35,6 @@
 
 
 #include "osd/osd_types.h"
-#include "osd/OSD.h"
 #include "osdc/Objecter.h"
 #include "mon/MonClient.h"
 #include "msg/Dispatcher.h"
@@ -50,7 +53,7 @@
 #include "auth/KeyRing.h"
 #include "auth/AuthAuthorizeHandler.h"
 #include "include/uuid.h"
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 
 #include "messages/MOSDBoot.h"
 #include "messages/MOSDAlive.h"
@@ -250,15 +253,15 @@ class ClientStub : public TestStub
     }
 
     messenger.reset(Messenger::create_client_messenger(cct, "stubclient"));
-    assert(messenger.get() != NULL);
+    ceph_assert(messenger.get() != NULL);
 
     messenger->set_default_policy(
 	Messenger::Policy::lossy_client(CEPH_FEATURE_OSDREPLYMUX));
     dout(10) << "ClientStub::" << __func__ << " starting messenger at "
-	    << messenger->get_myaddr() << dendl;
+	    << messenger->get_myaddrs() << dendl;
 
     objecter.reset(new Objecter(cct, messenger.get(), &monc, NULL, 0, 0));
-    assert(objecter.get() != NULL);
+    ceph_assert(objecter.get() != NULL);
     objecter->set_balanced_budget();
 
     monc.set_messenger(messenger.get());
@@ -299,10 +302,8 @@ class ClientStub : public TestStub
   }
 };
 
-typedef boost::scoped_ptr<AuthAuthorizeHandlerRegistry> AuthHandlerRef;
 class OSDStub : public TestStub
 {
-  AuthHandlerRef auth_handler_registry;
   int whoami;
   OSDSuperblock sb;
   OSDMap osdmap;
@@ -348,11 +349,6 @@ class OSDStub : public TestStub
 
   OSDStub(int _whoami, CephContext *cct)
     : TestStub(cct, "osd"),
-      auth_handler_registry(new AuthAuthorizeHandlerRegistry(
-				  cct,
-				  cct->_conf->auth_cluster_required.length() ?
-				  cct->_conf->auth_cluster_required :
-				  cct->_conf->auth_supported)),
       whoami(_whoami),
       gen(whoami),
       mon_osd_rng(STUB_MON_OSD_FIRST, STUB_MON_OSD_LAST)
@@ -361,12 +357,12 @@ class OSDStub : public TestStub
 	     << cct->_conf->auth_supported << dendl;
     stringstream ss;
     ss << "client-osd" << whoami;
-    std::string public_msgr_type = cct->_conf->ms_public_type.empty() ? cct->_conf->get_val<std::string>("ms_type") : cct->_conf->ms_public_type;
+    std::string public_msgr_type = cct->_conf->ms_public_type.empty() ? cct->_conf.get_val<std::string>("ms_type") : cct->_conf->ms_public_type;
     messenger.reset(Messenger::create(cct, public_msgr_type, entity_name_t::OSD(whoami),
 				      ss.str().c_str(), getpid(), 0));
 
     Throttle throttler(g_ceph_context, "osd_client_bytes",
-	g_conf->osd_client_message_size_cap);
+	g_conf()->osd_client_message_size_cap);
 
     messenger->set_default_policy(
 	Messenger::Policy::stateless_server(0));
@@ -380,8 +376,8 @@ class OSDStub : public TestStub
     messenger->set_policy(entity_name_t::TYPE_OSD,
 	Messenger::Policy::stateless_server(0));
 
-    dout(10) << __func__ << " public addr " << g_conf->public_addr << dendl;
-    int err = messenger->bind(g_conf->public_addr);
+    dout(10) << __func__ << " public addr " << g_conf()->public_addr << dendl;
+    int err = messenger->bind(g_conf()->public_addr);
     if (err < 0)
       exit(1);
 
@@ -397,8 +393,8 @@ class OSDStub : public TestStub
     Mutex::Locker l(lock);
 
     dout(1) << __func__ << " fsid " << monc.monmap.fsid
-	    << " osd_fsid " << g_conf->osd_uuid << dendl;
-    dout(1) << __func__ << " name " << g_conf->name << dendl;
+	    << " osd_fsid " << g_conf()->osd_uuid << dendl;
+    dout(1) << __func__ << " name " << g_conf()->name << dendl;
 
     timer.init();
     messenger->add_dispatcher_head(this);
@@ -418,7 +414,7 @@ class OSDStub : public TestStub
       monc.shutdown();
       return err;
     }
-    assert(!monc.get_fsid().is_zero());
+    ceph_assert(!monc.get_fsid().is_zero());
 
     monc.wait_auth_rotating(30.0);
 
@@ -533,9 +529,9 @@ class OSDStub : public TestStub
       return;
     }
 
-    osd_stat.kb = stbuf.f_blocks * stbuf.f_bsize / 1024;
-    osd_stat.kb_used = (stbuf.f_blocks - stbuf.f_bfree) * stbuf.f_bsize / 1024;
-    osd_stat.kb_avail = stbuf.f_bavail * stbuf.f_bsize / 1024;
+    osd_stat.statfs.total = stbuf.f_blocks * stbuf.f_bsize;
+    osd_stat.statfs.available = stbuf.f_bavail * stbuf.f_bsize;
+    osd_stat.statfs.internally_reserved = 0;
   }
 
   void send_pg_stats() {
@@ -553,7 +549,7 @@ class OSDStub : public TestStub
       if (pgs.count(pgid) == 0) {
 	derr << __func__
 	     << " pgid " << pgid << " not on our map" << dendl;
-	assert(0 == "pgid not on our map");
+	ceph_abort_msg("pgid not on our map");
       }
       pg_stat_t &s = pgs[pgid];
       mstats->pg_stat[pgid] = s;
@@ -572,7 +568,7 @@ class OSDStub : public TestStub
 
   void modify_pg(pg_t pgid) {
     dout(10) << __func__ << " pg " << pgid << dendl;
-    assert(pgs.count(pgid) > 0);
+    ceph_assert(pgs.count(pgid) > 0);
 
     pg_stat_t &s = pgs[pgid];
     utime_t now = ceph_clock_now();
@@ -619,7 +615,7 @@ class OSDStub : public TestStub
 	++it;
 	++pgs_at;
       }
-      assert(it != pgs.end());
+      ceph_assert(it != pgs.end());
       dout(20) << __func__
 	       << " pg at pos " << at << ": " << it->first << dendl;
       modify_pg(it->first);
@@ -704,7 +700,7 @@ class OSDStub : public TestStub
     for (; num_entries > 0; --num_entries) {
       LogEntry e;
       e.rank = messenger->get_myname();
-      e.addrs.v.push_back(messenger->get_myaddr());
+      e.addrs = messenger->get_myaddrs();
       e.stamp = now;
       e.seq = seq++;
       e.prio = CLOG_DEBUG;
@@ -746,7 +742,7 @@ class OSDStub : public TestStub
   }
 
   void handle_pg_create(MOSDPGCreate *m) {
-    assert(m != NULL);
+    ceph_assert(m != NULL);
     if (m->epoch < osdmap.get_epoch()) {
       std::cout << __func__ << " epoch " << m->epoch << " < "
 	       << osdmap.get_epoch() << "; dropping" << std::endl;
@@ -783,7 +779,7 @@ class OSDStub : public TestStub
               << dendl;
       dout(0) << monc.get_monmap() << dendl;
     }
-    assert(m->fsid == monc.get_fsid());
+    ceph_assert(m->fsid == monc.get_fsid());
 
     epoch_t first = m->get_first();
     epoch_t last = m->get_last();
@@ -844,7 +840,7 @@ class OSDStub : public TestStub
 	derr << "osd." << whoami << "::" << __func__
 	     << "** ERROR: applying incremental: "
 	     << cpp_strerror(err) << dendl;
-	assert(0 == "error applying incremental");
+	ceph_abort_msg("error applying incremental");
       }
     }
     dout(30) << __func__ << "\nosdmap:\n";
@@ -946,7 +942,7 @@ void handle_test_signal(int signum)
 }
 
 void usage() {
-  assert(our_name != NULL);
+  ceph_assert(our_name != NULL);
 
   std::cout << "usage: " << our_name
 	    << " <--stub-id ID> [--stub-id ID...]"
@@ -1001,7 +997,7 @@ int main(int argc, const char *argv[])
 			 CINIT_FLAG_NO_DEFAULT_CONFIG_FILE);
 
   common_init_finish(g_ceph_context);
-  g_ceph_context->_conf->apply_changes(NULL);
+  g_ceph_context->_conf.apply_changes(nullptr);
 
   set<int> stub_ids;
   double duration = 300.0;

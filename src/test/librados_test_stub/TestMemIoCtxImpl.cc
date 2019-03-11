@@ -20,6 +20,17 @@ static void to_vector(const interval_set<uint64_t> &set,
   }
 }
 
+// see PrimaryLogPG::finish_extent_cmp()
+static int cmpext_compare(const bufferlist &bl, const bufferlist &read_bl) {
+  for (uint64_t idx = 0; idx < bl.length(); ++idx) {
+    char read_byte = (idx < read_bl.length() ? read_bl[idx] : 0);
+    if (bl[idx] != read_byte) {
+      return -MAX_ERRNO - idx;
+    }
+  }
+  return 0;
+}
+
 namespace librados {
 
 TestMemIoCtxImpl::TestMemIoCtxImpl() {
@@ -46,7 +57,7 @@ TestIoCtxImpl *TestMemIoCtxImpl::clone() {
   return new TestMemIoCtxImpl(*this);
 }
 
-int TestMemIoCtxImpl::aio_remove(const std::string& oid, AioCompletionImpl *c) {
+int TestMemIoCtxImpl::aio_remove(const std::string& oid, AioCompletionImpl *c, int flags) {
   m_client->add_aio_operation(oid, true,
                               boost::bind(&TestMemIoCtxImpl::remove, this, oid,
                                           get_snap_context()),
@@ -334,7 +345,7 @@ int TestMemIoCtxImpl::remove(const std::string& oid, const SnapContext &snapc) {
 
   TestCluster::ObjectLocator locator(get_namespace(), oid);
   TestMemCluster::Files::iterator it = m_pool->files.find(locator);
-  assert(it != m_pool->files.end());
+  ceph_assert(it != m_pool->files.end());
 
   if (*it->second.rbegin() == file) {
     TestMemCluster::ObjectHandlers object_handlers;
@@ -468,6 +479,7 @@ int TestMemIoCtxImpl::sparse_read(const std::string& oid, uint64_t off,
 
   RWLock::RLocker l(file->lock);
   len = clip_io(off, len, file->data.length());
+  // TODO support sparse read
   if (m != NULL) {
     m->clear();
     if (len > 0) {
@@ -479,7 +491,7 @@ int TestMemIoCtxImpl::sparse_read(const std::string& oid, uint64_t off,
     bit.substr_of(file->data, off, len);
     append_clone(bit, data_bl);
   }
-  return 0;
+  return len > 0 ? 1 : 0;
 }
 
 int TestMemIoCtxImpl::stat(const std::string& oid, uint64_t *psize,
@@ -640,32 +652,30 @@ int TestMemIoCtxImpl::writesame(const std::string& oid, bufferlist& bl, size_t l
 
 int TestMemIoCtxImpl::cmpext(const std::string& oid, uint64_t off,
                              bufferlist& cmp_bl) {
-  if (get_snap_read() != CEPH_NOSNAP) {
-    return -EROFS;
-  } else if (m_client->is_blacklisted()) {
+  if (m_client->is_blacklisted()) {
     return -EBLACKLISTED;
   }
 
-  if (cmp_bl.length() == 0) {
-    return -EINVAL;
-  }
+  bufferlist read_bl;
+  uint64_t len = cmp_bl.length();
 
   TestMemCluster::SharedFile file;
   {
-    RWLock::WLocker l(m_pool->file_lock);
-    file = get_file(oid, true, get_snap_context());
+    RWLock::RLocker l(m_pool->file_lock);
+    file = get_file(oid, false, get_snap_context());
+    if (file == NULL) {
+      return cmpext_compare(cmp_bl, read_bl);
+    }
   }
 
   RWLock::RLocker l(file->lock);
-  size_t len = cmp_bl.length();
-  ensure_minimum_length(off + len, &file->data);
-  if (len > 0 && off <= len) {
-    for (uint64_t p = off; p < len; p++)  {
-      if (file->data[p] != cmp_bl[p])
-        return -MAX_ERRNO - p;
-    }
+  if (off >= file->data.length()) {
+    len = 0;
+  } else if (off + len > file->data.length()) {
+    len = file->data.length() - off;
   }
-  return 0;
+  read_bl.substr_of(file->data, off, len);
+  return cmpext_compare(cmp_bl, read_bl);
 }
 
 int TestMemIoCtxImpl::xattr_get(const std::string& oid,
@@ -757,8 +767,8 @@ void TestMemIoCtxImpl::ensure_minimum_length(size_t len, bufferlist *bl) {
 
 TestMemCluster::SharedFile TestMemIoCtxImpl::get_file(
     const std::string &oid, bool write, const SnapContext &snapc) {
-  assert(m_pool->file_lock.is_locked() || m_pool->file_lock.is_wlocked());
-  assert(!write || m_pool->file_lock.is_wlocked());
+  ceph_assert(m_pool->file_lock.is_locked() || m_pool->file_lock.is_wlocked());
+  ceph_assert(!write || m_pool->file_lock.is_wlocked());
 
   TestMemCluster::SharedFile file;
   TestMemCluster::Files::iterator it = m_pool->files.find(
@@ -806,7 +816,7 @@ TestMemCluster::SharedFile TestMemIoCtxImpl::get_file(
 
   if (get_snap_read() == CEPH_NOSNAP) {
     if (!file->exists) {
-      assert(it->second.size() > 1);
+      ceph_assert(it->second.size() > 1);
       return TestMemCluster::SharedFile();
     }
     return file;

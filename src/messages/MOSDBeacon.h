@@ -3,16 +3,20 @@
 
 #pragma once
 
-class MOSDBeacon : public PaxosServiceMessage {
+#include "PaxosServiceMessage.h"
+
+class MOSDBeacon : public MessageInstance<MOSDBeacon, PaxosServiceMessage> {
 public:
+  friend factory;
+
   std::vector<pg_t> pgs;
   epoch_t min_last_epoch_clean = 0;
 
   MOSDBeacon()
-    : PaxosServiceMessage(MSG_OSD_BEACON, 0)
+    : MessageInstance(MSG_OSD_BEACON, 0)
   {}
   MOSDBeacon(epoch_t e, epoch_t min_lec)
-    : PaxosServiceMessage(MSG_OSD_BEACON, e),
+    : MessageInstance(MSG_OSD_BEACON, e),
       min_last_epoch_clean(min_lec)
   {}
   void encode_payload(uint64_t features) override {
@@ -27,7 +31,7 @@ public:
     decode(pgs, p);
     decode(min_last_epoch_clean, p);
   }
-  const char *get_type_name() const override { return "osd_beacon"; }
+  std::string_view get_type_name() const override { return "osd_beacon"; }
   void print(ostream &out) const {
     out << get_type_name()
         << "(pgs " << pgs

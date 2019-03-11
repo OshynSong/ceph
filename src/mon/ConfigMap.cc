@@ -39,6 +39,9 @@ void MaskedOption::dump(Formatter *f) const
 {
   f->dump_string("name", opt->name);
   f->dump_string("value", raw_value);
+  f->dump_string("level", Option::level_to_str(opt->level));
+  f->dump_bool("can_update_at_runtime", opt->can_update_at_runtime());
+  f->dump_string("mask", mask.to_str());
   mask.dump(f);
 }
 
@@ -62,6 +65,24 @@ void Section::dump(Formatter *f) const
     f->dump_object(i.first.c_str(), i.second);
   }
 }
+
+std::string Section::get_minimal_conf() const
+{
+  std::string r;
+  for (auto& i : options) {
+    if (i.second.opt->has_flag(Option::FLAG_NO_MON_UPDATE) ||
+	i.second.opt->has_flag(Option::FLAG_MINIMAL_CONF)) {
+      if (i.second.mask.empty()) {
+	r += "\t"s + i.first + " = " + i.second.raw_value + "\n";
+      } else {
+	r += "\t# masked option excluded: " + i.first + " = " +
+	  i.second.raw_value + "\n";
+      }
+    }
+  }
+  return r;
+}
+
 
 // ------------
 

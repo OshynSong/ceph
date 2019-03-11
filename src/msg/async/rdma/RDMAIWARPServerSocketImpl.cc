@@ -7,13 +7,15 @@
 #undef dout_prefix
 #define dout_prefix *_dout << " RDMAIWARPServerSocketImpl "
 
-RDMAIWARPServerSocketImpl::RDMAIWARPServerSocketImpl(CephContext *cct, Infiniband* i,
-    RDMADispatcher *s, RDMAWorker *w, entity_addr_t& a)
-  : RDMAServerSocketImpl(cct, i, s, w, a)
+RDMAIWARPServerSocketImpl::RDMAIWARPServerSocketImpl(
+  CephContext *cct, Infiniband* i,
+  RDMADispatcher *s, RDMAWorker *w, entity_addr_t& a, unsigned addr_slot)
+  : RDMAServerSocketImpl(cct, i, s, w, a, addr_slot)
 {
 }
 
-int RDMAIWARPServerSocketImpl::listen(entity_addr_t &sa, const SocketOptions &opt)
+int RDMAIWARPServerSocketImpl::listen(entity_addr_t &sa,
+				      const SocketOptions &opt)
 {
   ldout(cct, 20) << __func__ << " bind to rdma point" << dendl;
   cm_channel = rdma_create_event_channel();
@@ -49,13 +51,13 @@ int RDMAIWARPServerSocketImpl::accept(ConnectedSocket *sock, const SocketOptions
 {
   ldout(cct, 15) << __func__ << dendl;
 
-  assert(sock);
+  ceph_assert(sock);
   struct pollfd pfd = {
     .fd = cm_channel->fd,
     .events = POLLIN,
   };
   int ret = poll(&pfd, 1, 0);
-  assert(ret >= 0);
+  ceph_assert(ret >= 0);
   if (!ret)
     return -EAGAIN;
 

@@ -1,4 +1,4 @@
-import { $, browser } from 'protractor';
+import { $, $$, browser } from 'protractor';
 
 export class Helper {
   static EC = browser.ExpectedConditions;
@@ -16,7 +16,7 @@ export class Helper {
       .logs()
       .get('browser')
       .then(function(browserLog) {
-        browserLog = browserLog.filter(log => {
+        browserLog = browserLog.filter((log) => {
           return log.level.value > 900; // SEVERE level
         });
 
@@ -30,5 +30,15 @@ export class Helper {
 
   static getBreadcrumbText() {
     return $('.breadcrumb-item.active').getText();
+  }
+
+  static getTabText(idx) {
+    return $$('.nav.nav-tabs li')
+      .get(idx)
+      .getText();
+  }
+
+  static getTabsCount() {
+    return $$('.nav.nav-tabs li').count();
   }
 }

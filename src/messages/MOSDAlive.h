@@ -19,12 +19,14 @@
 
 #include "messages/PaxosServiceMessage.h"
 
-class MOSDAlive : public PaxosServiceMessage {
- public:
+class MOSDAlive : public MessageInstance<MOSDAlive, PaxosServiceMessage> {
+public:
+  friend factory;
+
   epoch_t want = 0;
 
-  MOSDAlive(epoch_t h, epoch_t w) : PaxosServiceMessage(MSG_OSD_ALIVE, h), want(w) { }
-  MOSDAlive() : PaxosServiceMessage(MSG_OSD_ALIVE, 0) {}
+  MOSDAlive(epoch_t h, epoch_t w) : MessageInstance(MSG_OSD_ALIVE, h), want(w) { }
+  MOSDAlive() : MessageInstance(MSG_OSD_ALIVE, 0) {}
 private:
   ~MOSDAlive() override {}
 
@@ -40,7 +42,7 @@ public:
     decode(want, p);
   }
 
-  const char *get_type_name() const override { return "osd_alive"; }
+  std::string_view get_type_name() const override { return "osd_alive"; }
   void print(ostream &out) const override {
     out << "osd_alive(want up_thru " << want << " have " << version << ")";
   }

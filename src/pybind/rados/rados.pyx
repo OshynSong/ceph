@@ -23,7 +23,10 @@ import sys
 import threading
 import time
 
-from collections import Callable
+try:
+    from collections.abc import Callable
+except ImportError:
+    from collections import Callable
 from datetime import datetime
 from functools import partial, wraps
 from itertools import chain
@@ -85,9 +88,6 @@ cdef extern from "rados/librados.h" nogil:
 
     cdef uint64_t _LIBRADOS_SNAP_HEAD "LIBRADOS_SNAP_HEAD"
 
-    ctypedef void* rados_t
-    ctypedef void* rados_config_t
-    ctypedef void* rados_ioctx_t
     ctypedef void* rados_xattrs_iter_t
     ctypedef void* rados_omap_iter_t
     ctypedef void* rados_list_ctx_t
@@ -141,9 +141,7 @@ cdef extern from "rados/librados.h" nogil:
     int64_t rados_pool_lookup(rados_t cluster, const char *pool_name)
     int rados_pool_reverse_lookup(rados_t cluster, int64_t id, char *buf, size_t maxlen)
     int rados_pool_create(rados_t cluster, const char *pool_name)
-    int rados_pool_create_with_auid(rados_t cluster, const char *pool_name, uint64_t auid)
     int rados_pool_create_with_crush_rule(rados_t cluster, const char *pool_name, uint8_t crush_rule_num)
-    int rados_pool_create_with_all(rados_t cluster, const char *pool_name, uint64_t auid, uint8_t crush_rule_num)
     int rados_pool_get_base_tier(rados_t cluster, int64_t pool, int64_t *base_tier)
     int rados_pool_list(rados_t cluster, char *buf, size_t len)
     int rados_pool_delete(rados_t cluster, const char *pool_name)
@@ -201,7 +199,6 @@ cdef extern from "rados/librados.h" nogil:
     int rados_ioctx_create(rados_t cluster, const char *pool_name, rados_ioctx_t *ioctx)
     int rados_ioctx_create2(rados_t cluster, int64_t pool_id, rados_ioctx_t *ioctx)
     void rados_ioctx_destroy(rados_ioctx_t io)
-    int rados_ioctx_pool_set_auid(rados_ioctx_t io, uint64_t auid)
     void rados_ioctx_locator_set_key(rados_ioctx_t io, const char *key)
     void rados_ioctx_set_namespace(rados_ioctx_t io, const char * nspace)
 
@@ -308,6 +305,7 @@ cdef extern from "rados/librados.h" nogil:
     void rados_read_op_set_flags(rados_read_op_t read_op, int flags)
     int rados_omap_get_next(rados_omap_iter_t iter, const char * const* key, const char * const* val, size_t * len)
     void rados_omap_get_end(rados_omap_iter_t iter)
+    int rados_notify2(rados_ioctx_t io, const char * o, const char *buf, int buf_len, uint64_t timeout_ms, char **reply_buffer, size_t *reply_buffer_len)
 
 
 LIBRADOS_OP_FLAG_EXCL = _LIBRADOS_OP_FLAG_EXCL
@@ -1024,19 +1022,15 @@ Rados object in state %s." % self.state)
         finally:
             free(name)
 
-    @requires(('pool_name', str_type), ('auid', opt(int)), ('crush_rule', opt(int)))
-    def create_pool(self, pool_name, auid=None, crush_rule=None):
+    @requires(('pool_name', str_type), ('crush_rule', opt(int)))
+    def create_pool(self, pool_name, crush_rule=None):
         """
         Create a pool:
-        - with default settings: if auid=None and crush_rule=None
-        - owned by a specific auid: auid given and crush_rule=None
-        - with a specific CRUSH rule: if auid=None and crush_rule given
-        - with a specific CRUSH rule and auid: if auid and crush_rule given
+        - with default settings: if crush_rule=None
+        - with a specific CRUSH rule: crush_rule given
 
         :param pool_name: name of the pool to create
         :type pool_name: str
-        :param auid: the id of the owner of the new pool
-        :type auid: int
         :param crush_rule: rule to use for placement in the new pool
         :type crush_rule: int
 
@@ -1048,24 +1042,14 @@ Rados object in state %s." % self.state)
         cdef:
             char *_pool_name = pool_name
             uint8_t _crush_rule
-            uint64_t _auid
 
-        if auid is None and crush_rule is None:
+        if crush_rule is None:
             with nogil:
                 ret = rados_pool_create(self.cluster, _pool_name)
-        elif auid is None:
+        else:
             _crush_rule = crush_rule
             with nogil:
                 ret = rados_pool_create_with_crush_rule(self.cluster, _pool_name, _crush_rule)
-        elif crush_rule is None:
-            _auid = auid
-            with nogil:
-                ret = rados_pool_create_with_auid(self.cluster, _pool_name, _auid)
-        else:
-            _auid = auid
-            _crush_rule = crush_rule
-            with nogil:
-                ret = rados_pool_create_with_all(self.cluster, _pool_name, _auid, _crush_rule)
         if ret < 0:
             raise make_ex(ret, "error creating pool '%s'" % pool_name)
 
@@ -2284,7 +2268,7 @@ cdef class Ioctx(object):
     def aio_write_full(self, object_name, to_write,
                        oncomplete=None, onsafe=None):
         """
-        Asychronously write an entire object
+        Asynchronously write an entire object
 
         The object is filled with the provided data. If the object exists,
         it is atomically truncated and then written.
@@ -2328,7 +2312,7 @@ cdef class Ioctx(object):
               ('onsafe', opt(Callable)))
     def aio_append(self, object_name, to_append, oncomplete=None, onsafe=None):
         """
-        Asychronously append data to an object
+        Asynchronously append data to an object
 
         Queues the write and returns.
 
@@ -2382,7 +2366,7 @@ cdef class Ioctx(object):
               ('oncomplete', opt(Callable)))
     def aio_read(self, object_name, length, offset, oncomplete):
         """
-        Asychronously read data from an object
+        Asynchronously read data from an object
 
         oncomplete will be called with the returned read value as
         well as the completion:
@@ -2505,7 +2489,7 @@ cdef class Ioctx(object):
     @requires(('object_name', str_type), ('oncomplete', opt(Callable)), ('onsafe', opt(Callable)))
     def aio_remove(self, object_name, oncomplete=None, onsafe=None):
         """
-        Asychronously remove an object
+        Asynchronously remove an object
 
         :param object_name: name of the object to remove
         :type object_name: str
@@ -2543,26 +2527,6 @@ cdef class Ioctx(object):
         """
         if self.state != "open":
             raise IoctxStateError("The pool is %s" % self.state)
-
-    def change_auid(self, auid):
-        """
-        Attempt to change an io context's associated auid "owner."
-
-        Requires that you have write permission on both the current and new
-        auid.
-
-        :raises: :class:`Error`
-        """
-        self.require_ioctx_open()
-
-        cdef:
-            uint64_t _auid = auid
-
-        with nogil:
-            ret = rados_ioctx_pool_set_auid(self.io, _auid)
-        if ret < 0:
-            raise make_ex(ret, "error changing auid of '%s' to %d"
-                          % (self.name, auid))
 
     @requires(('loc_key', str_type))
     def set_locator_key(self, loc_key):
@@ -3110,6 +3074,40 @@ returned %d, but should return zero on success." % (self.name, ret))
                           (key, xattr_name))
         return True
 
+    @requires(('obj', str_type), ('msg', str_type), ('timeout_ms', int))
+    def notify(self, obj, msg='', timeout_ms=5000):
+        """
+        Send a rados notification to an object.
+
+        :param obj: the name of the object to notify
+        :type obj: str
+        :param msg: optional message to send in the notification
+        :type msg: str
+        :param timeout_ms: notify timeout (in ms)
+        :type timeout_ms: int
+
+        :raises: :class:`TypeError`
+        :raises: :class:`Error`
+        :returns: bool - True on success, otherwise raise an error
+        """
+        self.require_ioctx_open()
+
+        msglen = len(msg)
+        obj = cstr(obj, 'obj')
+        msg = cstr(msg, 'msg')
+        cdef:
+            char *_obj = obj
+            char *_msg = msg
+            int _msglen = msglen
+            uint64_t _timeout_ms = timeout_ms
+
+        with nogil:
+            ret = rados_notify2(self.io, _obj, _msg, _msglen, _timeout_ms,
+                                NULL, NULL)
+        if ret < 0:
+            raise make_ex(ret, "Failed to notify %r" % (obj))
+        return True
+
     def list_objects(self):
         """
         Get ObjectIterator on rados.Ioctx object.
@@ -3535,14 +3533,13 @@ returned %d, but should return zero on success." % (self.name, ret))
             ReadOp _read_op = read_op
             rados_omap_iter_t iter_addr = NULL
             int _max_return = max_return
-            int prval = 0
 
         with nogil:
             rados_read_op_omap_get_vals2(_read_op.read_op, _start_after, _filter_prefix,
-                                         _max_return, &iter_addr, NULL, &prval)
+                                         _max_return, &iter_addr, NULL, NULL)
         it = OmapIterator(self)
         it.ctx = iter_addr
-        return it, int(prval)
+        return it, 0   # 0 is meaningless; there for backward-compat
 
     @requires(('read_op', ReadOp), ('start_after', str_type), ('max_return', int))
     def get_omap_keys(self, read_op, start_after, max_return):
@@ -3562,14 +3559,13 @@ returned %d, but should return zero on success." % (self.name, ret))
             ReadOp _read_op = read_op
             rados_omap_iter_t iter_addr = NULL
             int _max_return = max_return
-            int prval = 0
 
         with nogil:
             rados_read_op_omap_get_keys2(_read_op.read_op, _start_after,
-                                         _max_return, &iter_addr, NULL, &prval)
+                                         _max_return, &iter_addr, NULL, NULL)
         it = OmapIterator(self)
         it.ctx = iter_addr
-        return it, int(prval)
+        return it, 0   # 0 is meaningless; there for backward-compat
 
     @requires(('read_op', ReadOp), ('keys', tuple))
     def get_omap_vals_by_keys(self, read_op, keys):
@@ -3587,16 +3583,15 @@ returned %d, but should return zero on success." % (self.name, ret))
             rados_omap_iter_t iter_addr
             char **_keys = to_bytes_array(keys)
             size_t key_num = len(keys)
-            int prval = 0
 
         try:
             with nogil:
                 rados_read_op_omap_get_vals_by_keys(_read_op.read_op,
                                                     <const char**>_keys,
-                                                    key_num, &iter_addr,  &prval)
+                                                    key_num, &iter_addr, NULL)
             it = OmapIterator(self)
             it.ctx = iter_addr
-            return it, int(prval)
+            return it, 0   # 0 is meaningless; there for backward-compat
         finally:
             free(_keys)
 
@@ -3910,10 +3905,10 @@ returned %d, but should return zero on success." % (self.name, ret))
                                                           c_vals, &val_length)
                 if ret == 0:
                     keys = [decode_cstr(key) for key in
-                                c_keys[:key_length].split(b'\0') if key]
+                                c_keys[:key_length].split(b'\0')]
                     vals = [decode_cstr(val) for val in
-                                c_vals[:val_length].split(b'\0') if val]
-                    return zip(keys, vals)
+                                c_vals[:val_length].split(b'\0')]
+                    return zip(keys, vals)[:-1]
                 elif ret == -errno.ERANGE:
                     pass
                 else:

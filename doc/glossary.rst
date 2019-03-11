@@ -103,7 +103,7 @@ reflect either technical terms or legacy ways of referring to Ceph systems.
 		``fsid`` term is used interchangeably with ``uuid``
 
 	OSD uuid
-		Just like the OSD fsid, this is the OSD unique identifer and is used
+		Just like the OSD fsid, this is the OSD unique identifier and is used
 		interchangeably with ``fsid``
 
 	bluestore
@@ -126,10 +126,13 @@ reflect either technical terms or legacy ways of referring to Ceph systems.
 
 	Ceph Manager Dashboard
 	Ceph Dashboard
+	Dashboard Module
 	Dashboard Plugin
 	Dashboard
-                A built-in web based monitoring and administration application to
-                Ceph Manager. Refer :ref:`mgr-dashboard` for more details.
+		A built-in web-based Ceph management and monitoring application to
+		administer various aspects and objects of the cluster. The dashboard is
+		implemented as a Ceph Manager module. See :ref:`mgr-dashboard` for more
+		details.
 
 	Ceph Metadata Server
 	MDS

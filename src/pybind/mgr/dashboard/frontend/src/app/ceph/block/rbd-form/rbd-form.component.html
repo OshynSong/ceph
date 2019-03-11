@@ -1,13 +1,3 @@
-<nav aria-label="breadcrumb">
-  <ol class="breadcrumb">
-    <li class="breadcrumb-item">Block</li>
-    <li class="breadcrumb-item">
-      <a routerLink="/block/rbd">Images</a></li>
-    <li class="breadcrumb-item active"
-        i18n>{mode, select, editing {Edit} cloning {Clone} copying {Copy} other {Add}}</li>
-  </ol>
-</nav>
-
 <div class="col-sm-12 col-lg-6">
   <form name="rbdForm"
         class="form-horizontal"
@@ -17,7 +7,9 @@
     <div class="panel panel-default">
       <div class="panel-heading">
         <h3 class="panel-title">
-          <span i18n>{mode, select, editing {Edit} cloning {Clone} copying {Copy} other {Add}}</span> RBD
+          <span
+            i18n>{mode, select, editing {Edit} cloning {Clone} copying {Copy} other {Add}}</span>
+          RBD
         </h3>
       </div>
       <div class="panel-body">
@@ -27,8 +19,7 @@
              *ngIf="rbdForm.getValue('parent')">
           <label i18n
                  class="control-label col-sm-3"
-                 for="name">{mode, select, cloning {Clone from} copying {Copy from} other {Parent}}
-          </label>
+                 for="name">{mode, select, cloning {Clone from} copying {Copy from} other {Parent}}</label>
           <div class="col-sm-9">
             <input class="form-control"
                    type="text"
@@ -42,9 +33,9 @@
         <!-- Name -->
         <div class="form-group"
              [ngClass]="{'has-error': rbdForm.showError('name', formDir)}">
-          <label i18n
-                 class="control-label col-sm-3"
-                 for="name">Name
+          <label class="control-label col-sm-3"
+                 for="name">
+            <ng-container i18n>Name</ng-container>
             <span class="required"></span>
           </label>
           <div class="col-sm-9">
@@ -55,10 +46,13 @@
                    name="name"
                    formControlName="name"
                    autofocus>
-            <span i18n
-                  class="help-block"
+            <span class="help-block"
                   *ngIf="rbdForm.showError('name', formDir, 'required')">
-              This field is required.
+              <ng-container i18n>This field is required.</ng-container>
+            </span>
+            <span class="help-block"
+                  *ngIf="rbdForm.showError('name', formDir, 'pattern')">
+              <ng-container i18n>'/' and '@' are not allowed.</ng-container>
             </span>
           </div>
         </div>
@@ -87,22 +81,20 @@
                     formControlName="pool"
                     *ngIf="mode !== 'editing' && poolPermission.read">
               <option *ngIf="pools === null"
-                      [ngValue]="null">Loading...
-              </option>
+                      [ngValue]="null"
+                      i18n>Loading...</option>
               <option *ngIf="pools !== null && pools.length === 0"
-                      [ngValue]="null">-- No rbd pools available --
-              </option>
+                      [ngValue]="null"
+                      i18n>-- No rbd pools available --</option>
               <option *ngIf="pools !== null && pools.length > 0"
-                      [ngValue]="null">-- Select a pool --
-              </option>
+                      [ngValue]="null"
+                      i18n>-- Select a pool --</option>
               <option *ngFor="let pool of pools"
                       [value]="pool.pool_name">{{ pool.pool_name }}</option>
             </select>
-            <span i18n
+            <span *ngIf="rbdForm.showError('pool', formDir, 'required')"
                   class="help-block"
-                  *ngIf="rbdForm.showError('pool', formDir, 'required')">
-              This field is required.
-            </span>
+                  i18n>This field is required.</span>
           </div>
         </div>
 
@@ -127,7 +119,7 @@
              *ngIf="rbdForm.getValue('useDataPool')">
           <label class="control-label col-sm-3"
                  for="dataPool">
-            Data pool
+            <ng-container i18n>Data pool</ng-container>
             <span class="required"
                   *ngIf="mode !== 'editing'"></span>
             <cd-helper i18n-html
@@ -149,31 +141,29 @@
                     (change)="onDataPoolChange($event.target.value)"
                     *ngIf="mode !== 'editing' && poolPermission.read">
               <option *ngIf="dataPools === null"
-                      [ngValue]="null">Loading...
-              </option>
+                      [ngValue]="null"
+                      i18n>Loading...</option>
               <option *ngIf="dataPools !== null && dataPools.length === 0"
-                      [ngValue]="null">-- No data pools available --
-              </option>
+                      [ngValue]="null"
+                      i18n>-- No data pools available --</option>
               <option *ngIf="dataPools !== null && dataPools.length > 0"
                       [ngValue]="null">-- Select a data pool --
               </option>
               <option *ngFor="let dataPool of dataPools"
                       [value]="dataPool.pool_name">{{ dataPool.pool_name }}</option>
             </select>
-            <span i18n
-                  class="help-block"
-                  *ngIf="rbdForm.showError('dataPool', formDir, 'required')">
-              This field is required.
-            </span>
+            <span class="help-block"
+                  *ngIf="rbdForm.showError('dataPool', formDir, 'required')"
+                  i18n>This field is required.</span>
           </div>
         </div>
 
         <!-- Size -->
         <div class="form-group"
              [ngClass]="{'has-error': rbdForm.showError('size', formDir)}">
-          <label i18n
-                 class="control-label col-sm-3"
-                 for="size">Size
+          <label class="control-label col-sm-3"
+                 for="size">
+            <ng-container i18n>Size</ng-container>
             <span class="required"></span>
           </label>
           <div class="col-sm-9">
@@ -182,20 +172,16 @@
                    class="form-control"
                    type="text"
                    formControlName="size"
-                   ì18n-placeholder
+                   i18n-placeholder
                    placeholder="e.g., 10GiB"
                    defaultUnit="GiB"
                    cdDimlessBinary>
-            <span i18n
-                  class="help-block"
-                  *ngIf="rbdForm.showError('size', formDir, 'required')">
-              This field is required.
-            </span>
-            <span i18n
-                  class="help-block"
-                  *ngIf="rbdForm.showError('size', formDir, 'invalidSizeObject')">
-              You have to increase the size.
-            </span>
+            <span class="help-block"
+                  *ngIf="rbdForm.showError('size', formDir, 'required')"
+                  i18n>This field is required.</span>
+            <span class="help-block"
+                  *ngIf="rbdForm.showError('size', formDir, 'invalidSizeObject')"
+                  i18n>You have to increase the size.</span>
           </div>
         </div>
 
@@ -205,9 +191,7 @@
              formGroupName="features">
           <label i18n
                  class="col-sm-3 control-label"
-                 for="features">
-            Features
-          </label>
+                 for="features">Features</label>
           <div class="col-sm-9">
             <div class="checkbox checkbox-primary"
                  *ngFor="let feature of featuresList">
@@ -226,92 +210,96 @@
         <!-- Advanced -->
         <div class="row">
           <div class="col-sm-12">
-            <a i18n
-               class="pull-right margin-right-md"
+            <a class="pull-right margin-right-md"
                (click)="advancedEnabled = true"
-               *ngIf="!advancedEnabled">
-              Advanced...
-            </a>
+               *ngIf="!advancedEnabled"
+               i18n>Advanced...</a>
           </div>
         </div>
-        <div *ngIf="advancedEnabled">
+        <div [hidden]="!advancedEnabled">
 
           <h2 i18n
               class="page-header">Advanced</h2>
 
-          <!-- Object Size -->
-          <div class="form-group"
-               [ngClass]="{'has-error': rbdForm.showError('obj_size', formDir)}">
-            <label i18n
-                   class="control-label col-sm-3"
-                   for="size">Object size
-            </label>
-            <div class="col-sm-9">
-              <select id="obj_size"
-                    name="obj_size"
-                    class="form-control"
-                    formControlName="obj_size">
-                <option *ngFor="let objectSize of objectSizes"
-                        [value]="objectSize">{{ objectSize }}</option>
-              </select>
+          <div class="section">
+            <h3 class="page-header" i18n>Striping</h3>
+
+            <!-- Object Size -->
+            <div class="form-group"
+                 [ngClass]="{'has-error': rbdForm.showError('obj_size', formDir)}">
+              <label i18n
+                     class="control-label col-sm-3"
+                     for="size">Object size</label>
+              <div class="col-sm-9">
+                <select id="obj_size"
+                        name="obj_size"
+                        class="form-control"
+                        formControlName="obj_size">
+                  <option *ngFor="let objectSize of objectSizes"
+                          [value]="objectSize">{{ objectSize }}</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Stripe Unit -->
+            <div class="form-group"
+                 [ngClass]="{'has-error': rbdForm.showError('stripingUnit', formDir)}">
+              <label class="control-label col-sm-3"
+                     for="stripingUnit">
+                <span i18n>Stripe unit</span>
+                <span class="required"
+                      *ngIf="rbdForm.getValue('stripingCount')">
+              </span>
+              </label>
+              <div class="col-sm-9">
+                <select id="stripingUnit"
+                        name="stripingUnit"
+                        class="form-control"
+                        formControlName="stripingUnit">
+                  <option i18n
+                          [ngValue]="null">-- Select stripe unit --</option>
+                  <option *ngFor="let objectSize of objectSizes"
+                          [value]="objectSize">{{ objectSize }}</option>
+                </select>
+                <span class="help-block"
+                      *ngIf="rbdForm.showError('stripingUnit', formDir, 'required')"
+                      i18n>This field is required because stripe count is defined!</span>
+                <span class="help-block"
+                      *ngIf="rbdForm.showError('stripingUnit', formDir, 'invalidStripingUnit')"
+                      i18n>Stripe unit is greater than object size.</span>
+              </div>
+            </div>
+
+            <!-- Stripe Count -->
+            <div class="form-group"
+                 [ngClass]="{'has-error': rbdForm.showError('stripingCount', formDir)}">
+              <label class="control-label col-sm-3"
+                     for="stripingCount">
+                <span i18n>Stripe count</span>
+                <span class="required"
+                      *ngIf="rbdForm.getValue('stripingUnit')">
+              </span>
+              </label>
+              <div class="col-sm-9">
+                <input id="stripingCount"
+                       name="stripingCount"
+                       formControlName="stripingCount"
+                       class="form-control"
+                       type="number">
+                <span class="help-block"
+                      *ngIf="rbdForm.showError('stripingCount', formDir, 'required')"
+                      i18n>This field is required because stripe unit is defined!</span>
+                <span class="help-block"
+                      *ngIf="rbdForm.showError('stripingCount', formDir, 'min')"
+                      i18n>Stripe count must be greater than 0.</span>
+              </div>
             </div>
           </div>
 
-          <!-- Strippe Unit -->
-          <div class="form-group"
-               [ngClass]="{'has-error': rbdForm.showError('stripingUnit', formDir)}">
-            <label class="control-label col-sm-3"
-                   for="stripingUnit">
-              <span i18n>Stripe unit</span><span class="required"
-                                 *ngIf="rbdForm.getValue('stripingCount')"></span>
-            </label>
-            <div class="col-sm-9">
-              <select id="stripingUnit"
-                    name="stripingUnit"
-                    class="form-control"
-                    formControlName="stripingUnit">
-                <option i18n [ngValue]="null">-- Select stripe unit --</option>
-                <option *ngFor="let objectSize of objectSizes"
-                        [value]="objectSize">{{ objectSize }}</option>
-              </select>
-              <span i18n
-                    class="help-block"
-                    *ngIf="rbdForm.showError('stripingUnit', formDir, 'required')">
-                This field is required because stripe count is defined!
-              </span>
-              <span i18n
-                  class="help-block"
-                  *ngIf="rbdForm.showError('stripingUnit', formDir, 'invalidStripingUnit')">
-              Stripe unit is greater than object size.
-            </span>
-            </div>
-          </div>
-
-          <!-- Strippe Count -->
-          <div class="form-group"
-               [ngClass]="{'has-error': rbdForm.showError('stripingCount', formDir)}">
-            <label class="control-label col-sm-3"
-                   for="stripingCount">
-              <span i18n>Stripe count</span><span class="required"
-                                  *ngIf="rbdForm.getValue('stripingUnit')"></span>
-            </label>
-            <div class="col-sm-9">
-              <input id="stripingCount"
-                     name="stripingCount"
-                     formControlName="stripingCount"
-                     class="form-control"
-                     type="number">
-              <span i18n
-                    class="help-block"
-                    *ngIf="rbdForm.showError('stripingCount', formDir, 'required')">
-                This field is required because stripe unit is defined!
-              </span>
-              <span i18n
-                    class="help-block"
-                    *ngIf="rbdForm.showError('stripingCount', formDir, 'min')">
-                Stripe count must be greater than 0.
-              </span>
-            </div>
+          <div class="section">
+            <cd-rbd-configuration-form [form]="rbdForm"
+                                       [initializeData]="initializeConfigData"
+                                       (changes)="getDirtyConfigurationValues = $event"></cd-rbd-configuration-form>
           </div>
 
         </div>
@@ -322,14 +310,12 @@
           <cd-submit-button [form]="formDir"
                             type="button"
                             (submitAction)="submit()">
-            <span i18n>{mode, select, editing {Update} cloning {Clone} copying {Copy} other {Create}}</span> RBD
+            <span i18n>{mode, select, editing {Update} cloning {Clone} copying {Copy} other {Create}} RBD</span>
           </cd-submit-button>
-          <button i18n
-                  type="button"
+          <button type="button"
                   class="btn btn-sm btn-default"
-                  routerLink="/block/rbd">
-            Back
-          </button>
+                  routerLink="/block/rbd"
+                  i18n>Back</button>
         </div>
       </div>
     </div>

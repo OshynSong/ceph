@@ -7,9 +7,7 @@ Vcs-Browser: https://github.com/ceph/ceph
 Maintainer: Ceph Maintainers <ceph-maintainers@lists.ceph.com>
 Uploaders: Ken Dreyer <kdreyer@redhat.com>,
            Alfredo Deza <adeza@redhat.com>,
-Build-Depends: bc,
-               btrfs-tools,
-               cmake (>= 3.5),
+Build-Depends: cmake (>= 3.5),
                cpio,
                cryptsetup-bin | cryptsetup,
                cython,
@@ -19,11 +17,10 @@ Build-Depends: bc,
                dh-exec,
                dh-python,
                dh-systemd,
-               gdisk,
                git,
                gperf,
                javahelper,
-               jq,
+# Make-Check   jq,
                junit4,
                libaio-dev,
                libbabeltrace-ctf-dev,
@@ -41,6 +38,7 @@ Build-Depends: bc,
                libleveldb-dev,
                liblttng-ust-dev,
                liblz4-dev (>= 0.0~r131),
+               libncurses-dev,
                libnss3-dev,
                liboath-dev,
                libsnappy-dev,
@@ -48,32 +46,36 @@ Build-Depends: bc,
                libtool,
                libudev-dev,
                libxml2-dev,
+               librabbitmq-dev,
                lsb-release,
                parted,
                pkg-config,
                python (>= 2.7),
                python-all-dev,
                python-cherrypy3,
-               python-nose,
-               python-pecan,
-               python-bcrypt,
-               python-six,
-               python-tox,
-               python-coverage,
-               python-prettytable,
+# Make-Check   python-jwt,
+# Make-Check   python-nose,
+# Make-Check   python-pecan,
+# Make-Check   python-bcrypt,
+# Make-Check   python-six,
+# Make-Check   python-tox,
+# Make-Check   python-coverage,
+# Make-Check   python-openssl,
+# Make-Check   python-prettytable,
+# Make-Check   python-requests,
                python-setuptools,
                python-sphinx,
-               python-werkzeug,
+# Make-Check   python-werkzeug,
                python3-all-dev,
                python3-setuptools,
-               socat,
+# Make-Check   socat,
                uuid-dev,
                uuid-runtime,
                valgrind,
                virtualenv | python-virtualenv,
                xfslibs-dev,
-               xfsprogs,
-               xmlstarlet,
+# Make-Check   xfsprogs,
+# Make-Check   xmlstarlet,
                yasm [amd64],
                zlib1g-dev,
 Standards-Version: 3.9.3
@@ -97,7 +99,6 @@ Depends: binutils,
          debianutils,
          e2fsprogs,
          findutils,
-         gdisk,
          grep,
          logrotate,
          parted,
@@ -179,7 +180,7 @@ Package: ceph-mgr
 Architecture: linux-any
 Depends: ceph-base (= ${binary:Version}),
          python-cherrypy3,
-         python-jinja2,
+         python-jwt,
          python-openssl,
          python-pecan,
          python-bcrypt,
@@ -187,6 +188,11 @@ Depends: ceph-base (= ${binary:Version}),
          ${misc:Depends},
          ${python:Depends},
          ${shlibs:Depends},
+Recommends: ceph-mgr-dashboard,
+            ceph-mgr-diskprediction-local,
+            ceph-mgr-diskprediction-cloud,
+            ceph-mgr-rook,
+            ceph-mgr-ssh
 Suggests: python-influxdb
 Replaces: ceph (<< 0.93-417),
 Breaks: ceph (<< 0.93-417),
@@ -197,6 +203,91 @@ Description: manager for the ceph distributed storage system
  .
  This package contains the manager daemon, which is used to expose high
  level management and monitoring functionality.
+
+Package: ceph-mgr-dashboard
+Architecture: all
+Depends: ceph-mgr (= ${binary:Version}),
+         python-cherrypy3,
+         python-jwt,
+         python-openssl,
+         python-bcrypt,
+         python-werkzeug,
+         ${misc:Depends},
+         ${python:Depends},
+         ${shlibs:Depends},
+Description: dashboard plugin for ceph-mgr
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package provides a ceph-mgr plugin, providing a web-based
+ application to monitor and manage many aspects of a Ceph cluster and
+ related components.
+ .
+ See the Dashboard documentation at http://docs.ceph.com/ for details
+ and a detailed feature overview.
+
+Package: ceph-mgr-diskprediction-local
+Architecture: all
+Depends: ceph-mgr (= ${binary:Version}),
+         python-numpy,
+         python-scipy,
+         python-sklearn,
+         ${misc:Depends},
+         ${python:Depends},
+         ${shlibs:Depends},
+Description: diskprediction-local plugin for ceph-mgr
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package contains the diskprediction_local plugin for the ceph-mgr
+ daemon, which helps predict disk failures.
+
+Package: ceph-mgr-diskprediction-cloud
+Architecture: all
+Depends: ceph-mgr (= ${binary:Version}),
+         ${misc:Depends},
+         ${python:Depends},
+         ${shlibs:Depends},
+Description: diskprediction-cloud plugin for ceph-mgr
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package contains the diskprediction_cloud plugin for the ceph-mgr
+ daemon, which helps predict disk failures.
+
+Package: ceph-mgr-rook
+Architecture: all
+Depends: ceph-mgr (= ${binary:Version}),
+         python-six,
+         ${misc:Depends},
+         ${python:Depends},
+         ${shlibs:Depends},
+Description: rook plugin for ceph-mgr
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package contains the rook plugin for ceph-mgr's orchestration
+ functionality, to allow ceph-mgr to install and configure ceph using
+ Rook.
+
+Package: ceph-mgr-ssh
+Architecture: all
+Depends: ceph-mgr (= ${binary:Version}),
+	 python-six,
+         ${misc:Depends},
+         ${python:Depends},
+Description: ssh orchestrator plugin for ceph-mgr
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package contains the SSH plugin for ceph-mgr's orchestration
+ functionality, to allow ceph-mgr to perform orchestration functions
+ over a standard SSH connection.
 
 Package: ceph-mgr-dbg
 Architecture: linux-any
@@ -277,7 +368,8 @@ Package: ceph-fuse
 Architecture: linux-any
 Depends: ${misc:Depends},
          ${shlibs:Depends},
-Recommends: fuse,
+         ${python3:Depends},
+         fuse,
 Description: FUSE-based client for the Ceph distributed file system
  Ceph is a massively scalable, open-source, distributed
  storage system that runs on commodity hardware and delivers object,
@@ -394,6 +486,7 @@ Package: ceph-common
 Architecture: linux-any
 Depends: librbd1 (= ${binary:Version}),
          python-cephfs (= ${binary:Version}),
+         python-ceph-argparse (= ${binary:Version}),
          python-prettytable,
          python-rados (= ${binary:Version}),
          python-rbd (= ${binary:Version}),
@@ -409,11 +502,13 @@ Replaces: ceph (<< 10),
           ceph-test (<< 9.0.3-1646),
           librbd1 (<< 0.92-1238),
           python-ceph (<< 0.92-1223),
+	  radosgw (<< 12.0.3)
 Breaks: ceph (<< 10),
         ceph-fs-common (<< 11.0),
         ceph-test (<< 9.0.3-1646),
         librbd1 (<< 0.92-1238),
         python-ceph (<< 0.92-1223),
+	radosgw (<< 12.0.3)
 Suggests: ceph-base (= ${binary:Version}),
           ceph-mds (= ${binary:Version}),
 Description: common utilities to mount and interact with a ceph storage cluster
@@ -457,10 +552,8 @@ Description: OCF-compliant resource agents for Ceph
  such as Pacemaker.
 
 Package: librados2
-Conflicts: librados,
-           librados1,
-Replaces: librados,
-          librados1,
+Conflicts: librados
+Replaces: librados
 Architecture: linux-any
 Section: libs
 Depends: ${misc:Depends},
@@ -472,8 +565,6 @@ Description: RADOS distributed object store client library
  store using a simple file-like interface.
 
 Package: librados2-dbg
-Conflicts: librados1-dbg,
-Replaces: librados1-dbg,
 Architecture: linux-any
 Section: debug
 Priority: extra
@@ -504,6 +595,21 @@ Description: RADOS distributed object store client library (development files)
  store using a simple file-like interface.
  .
  This package contains development files needed for building applications that
+ link against librados.
+
+Package: libradospp-dev
+Architecture: linux-any
+Section: libdevel
+Depends: librados-dev (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends},
+Description: RADOS distributed object store client C++ library (development files)
+ RADOS is a reliable, autonomic distributed object storage cluster
+ developed as part of the Ceph distributed storage system.  This is a
+ shared library allowing applications to access the distributed object
+ store using a simple file-like interface.
+ .
+ This package contains development files needed for building C++ applications that
  link against librados.
 
 Package: libradosstriper1
@@ -758,7 +864,7 @@ Description: Meta-package for python libraries for the Ceph libraries
 Package: python-rados
 Architecture: linux-any
 Section: python
-Depends: librados2 (= ${binary:Version}),
+Depends: librados2
          ${misc:Depends},
          ${python:Depends},
          ${shlibs:Depends},
@@ -792,7 +898,7 @@ Description: Python 2 libraries for the Ceph librados library
 Package: python3-rados
 Architecture: linux-any
 Section: python
-Depends: librados2 (= ${binary:Version}),
+Depends: librados2,
          ${misc:Depends},
          ${python3:Depends},
          ${shlibs:Depends},
@@ -891,6 +997,7 @@ Package: python-rgw
 Architecture: linux-any
 Section: python
 Depends: librgw2 (>= ${binary:Version}),
+         python-rados (= ${binary:Version}),
          ${misc:Depends},
          ${python:Depends},
          ${shlibs:Depends},
@@ -925,6 +1032,7 @@ Package: python3-rgw
 Architecture: linux-any
 Section: python
 Depends: librgw2 (>= ${binary:Version}),
+         python3-rados (= ${binary:Version}),
          ${misc:Depends},
          ${python3:Depends},
          ${shlibs:Depends},
@@ -957,6 +1065,8 @@ Package: python-cephfs
 Architecture: linux-any
 Section: python
 Depends: libcephfs2 (= ${binary:Version}),
+         python-rados (= ${binary:Version}),
+         python-ceph-argparse (= ${binary:Version}),
          ${misc:Depends},
          ${python:Depends},
          ${shlibs:Depends},
@@ -991,6 +1101,8 @@ Package: python3-cephfs
 Architecture: linux-any
 Section: python
 Depends: libcephfs2 (= ${binary:Version}),
+         python3-rados (= ${binary:Version}),
+         python3-ceph-argparse (= ${binary:Version}),
          ${misc:Depends},
          ${python3:Depends},
          ${shlibs:Depends},
@@ -1019,8 +1131,23 @@ Description: Python 3 libraries for the Ceph libcephfs library
  .
  This package contains the debugging symbols for python3-cephfs.
 
+Package: python-ceph-argparse
+Architecture: all
+Section: python
+Depends: ${misc:Depends},
+         ${python:Depends},
+Replaces: ceph-common (<< 14.0.0)
+Breaks: ceph-common (<< 14.0.0)
+Description: Python 2 utility libraries for Ceph CLI
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.
+ .
+ This package contains types and routines for Python 2 used by the
+ Ceph CLI as well as the RESTful interface.
+
 Package: python3-ceph-argparse
-Architecture: linux-any
+Architecture: all
 Section: python
 Depends: ${misc:Depends},
          ${python3:Depends},
@@ -1056,3 +1183,16 @@ Depends: librados-dev (= ${binary:Version}) ${misc:Depends},
 Description: RADOS object class development kit.
  .
  This package contains development files needed for building RADOS object class plugins.
+
+Package: cephfs-shell
+Architecture: all
+Depends: ${misc:Depends}
+         ${python3:Depends}
+Description: interactive shell for the Ceph distributed file system
+ Ceph is a massively scalable, open-source, distributed
+ storage system that runs on commodity hardware and delivers object,
+ block and file system storage.  This is an interactive tool that
+ allows accessing a Ceph file system without mounting it by providing
+ a nice pseudo-shell which works like an FTP client.
+ .
+ This package contains a CLI for interacting with the CephFS.

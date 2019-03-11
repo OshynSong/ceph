@@ -8,10 +8,10 @@
 #include <type_traits>
 #include <boost/lockfree/queue.hpp>
 #include <boost/optional.hpp>
-#include <core/future.hh>
-#include <core/gate.hh>
-#include <core/semaphore.hh>
-#include <core/sharded.hh>
+#include <seastar/core/future.hh>
+#include <seastar/core/gate.hh>
+#include <seastar/core/semaphore.hh>
+#include <seastar/core/sharded.hh>
 
 #include "Condition.h"
 
@@ -85,7 +85,7 @@ public:
    * @param n_threads the number of threads in this thread pool.
    * @param cpu the CPU core to which this thread pool is assigned
    * @note each @c Task has its own ceph::thread::Condition, which possesses
-   * possesses an fd, so we should keep the size of queue under a resonable
+   * possesses an fd, so we should keep the size of queue under a reasonable
    * limit.
    */
   ThreadPool(size_t n_threads, size_t queue_sz, unsigned cpu);

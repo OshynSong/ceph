@@ -29,15 +29,17 @@ struct ceph_mon_subscribe_item_old {
 WRITE_RAW_ENCODER(ceph_mon_subscribe_item_old)
 
 
-struct MMonSubscribe : public Message {
+class MMonSubscribe : public MessageInstance<MMonSubscribe> {
+public:
+  friend factory;
 
-  static const int HEAD_VERSION = 3;
-  static const int COMPAT_VERSION = 1;
+  static constexpr int HEAD_VERSION = 3;
+  static constexpr int COMPAT_VERSION = 1;
 
   string hostname;
   map<string, ceph_mon_subscribe_item> what;
   
-  MMonSubscribe() : Message(CEPH_MSG_MON_SUBSCRIBE, HEAD_VERSION, COMPAT_VERSION) { }
+  MMonSubscribe() : MessageInstance(CEPH_MSG_MON_SUBSCRIBE, HEAD_VERSION, COMPAT_VERSION) { }
 private:
   ~MMonSubscribe() override {}
 
@@ -47,7 +49,7 @@ public:
     what[w].flags = flags;
   }
 
-  const char *get_type_name() const override { return "mon_subscribe"; }
+  std::string_view get_type_name() const override { return "mon_subscribe"; }
   void print(ostream& o) const override {
     o << "mon_subscribe(" << what << ")";
   }

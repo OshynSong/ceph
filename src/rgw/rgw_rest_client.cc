@@ -140,9 +140,10 @@ int RGWRESTSimpleRequest::execute(RGWAccessKey& key, const char *_method, const 
   string canonical_header;
   map<string, string> meta_map;
   map<string, string> sub_resources;
+
   rgw_create_s3_canonical_header(method.c_str(), NULL, NULL, date_str.c_str(),
-                            meta_map, url.c_str(), sub_resources,
-                            canonical_header);
+				 meta_map, meta_map, url.c_str(), sub_resources,
+				 canonical_header);
 
   string digest;
   try {
@@ -760,7 +761,7 @@ int RGWRESTStreamRWRequest::do_send_prepare(RGWAccessKey *key, map<string, strin
   if (send_data) {
     set_send_length(send_data->length());
     set_outbl(*send_data);
-    send_data_hint = true;
+    set_send_data_hint(true);
   }
   
 
@@ -788,7 +789,7 @@ int RGWRESTStreamRWRequest::send(RGWHTTPManager *mgr)
     return RGWHTTP::send(this);
   }
 
-  int r = mgr->add_request(this, send_data_hint);
+  int r = mgr->add_request(this);
   if (r < 0)
     return r;
 
@@ -894,7 +895,7 @@ int RGWHTTPStreamRWRequest::receive_data(void *ptr, size_t len, bool *pause)
       in_data.clear();
     } else {
       /* partial read */
-      assert(in_data.length() <= orig_in_data_len);
+      ceph_assert(in_data.length() <= orig_in_data_len);
       len = ret;
       bufferlist bl;
       size_t left_to_read = orig_in_data_len - len;

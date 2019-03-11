@@ -21,8 +21,6 @@
 #include "common/Tub.h"
 
 #include "msg/async/Stack.h"
-#include "dpdk_rte.h"
-#include "DPDK.h"
 #include "net.h"
 #include "const.h"
 #include "IP.h"
@@ -123,7 +121,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
     } else {
       _cur_off += f.size;
     }
-    assert(data.length());
+    ceph_assert(data.length());
     return data.length();
   }
   virtual ssize_t send(bufferlist &bl, bool more) override {
@@ -183,7 +181,7 @@ class NativeConnectedSocketImpl : public ConnectedSocketImpl {
 template <typename Protocol>
 DPDKServerSocketImpl<Protocol>::DPDKServerSocketImpl(
   Protocol& proto, uint16_t port, const SocketOptions &opt, int type)
-  : ServerSocketImpl<Protocol>(type), _listener(proto.listen(port)) {}
+  : ServerSocketImpl(type), _listener(proto.listen(port)) {}
 
 template <typename Protocol>
 int DPDKServerSocketImpl<Protocol>::accept(ConnectedSocket *s, const SocketOptions &options, entity_addr_t *out, Worker *w) {
@@ -215,9 +213,7 @@ class DPDKWorker : public Worker {
     std::shared_ptr<DPDKDevice> _dev;
     ipv4 _inet;
     Impl(CephContext *cct, unsigned i, EventCenter *c, std::shared_ptr<DPDKDevice> dev);
-    ~Impl() {
-      _dev->unset_local_queue(id);
-    }
+    ~Impl();
   };
   std::unique_ptr<Impl> _impl;
 
@@ -251,11 +247,7 @@ class DPDKStack : public NetworkStack {
   virtual bool support_local_listen_table() const override { return true; }
 
   virtual void spawn_worker(unsigned i, std::function<void ()> &&func) override;
-  virtual void join_worker(unsigned i) override {
-    dpdk::eal::execute_on_master([&]() {
-      rte_eal_wait_lcore(i+1);
-    });
-  }
+  virtual void join_worker(unsigned i) override;
 };
 
 #endif

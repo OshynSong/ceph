@@ -311,7 +311,7 @@ public:
     proc_replica_log(
       oinfo, olog, omissing, pg_shard_t(1, shard_id_t(0)));
 
-    assert(oinfo.last_update >= log.tail);
+    ceph_assert(oinfo.last_update >= log.tail);
 
     if (!tcase.base.empty()) {
       ASSERT_EQ(tcase.base.rbegin()->version, oinfo.last_update);
@@ -2311,7 +2311,7 @@ public:
     ObjectStore::Transaction t2;
     t2.touch(test_coll, ghobject_t(existing_oid));
     t2.setattr(test_coll, ghobject_t(existing_oid), OI_ATTR, enc_oi);
-    ASSERT_EQ(0u, store->queue_transaction(ch, std::move(t2)));
+    ASSERT_EQ(0, store->queue_transaction(ch, std::move(t2)));
     info.last_backfill = hobject_t::get_max();
     info.last_complete = eversion_t();
   }
@@ -2469,7 +2469,7 @@ public:
       t.omap_setkeys(test_coll, log_oid, km);
     }
     auto ch = store->open_collection(test_coll);
-    ASSERT_EQ(0u, store->queue_transaction(ch, std::move(t)));
+    ASSERT_EQ(0, store->queue_transaction(ch, std::move(t)));
 
     auto orig_dups = log.dups;
     clear();
@@ -2691,9 +2691,9 @@ struct PGLogTrimTest :
     snprintf(max_entries_s, size, "%u", max_entries);
     snprintf(dup_track_s, size, "%u", dup_track);
 
-    cct->_conf->set_val_or_die("osd_min_pg_log_entries", min_entries_s);
-    cct->_conf->set_val_or_die("osd_max_pg_log_entries", max_entries_s);
-    cct->_conf->set_val_or_die("osd_pg_log_dups_tracked", dup_track_s);
+    cct->_conf.set_val_or_die("osd_min_pg_log_entries", min_entries_s);
+    cct->_conf.set_val_or_die("osd_max_pg_log_entries", max_entries_s);
+    cct->_conf.set_val_or_die("osd_pg_log_dups_tracked", dup_track_s);
   }
 }; // struct PGLogTrimTest
 
@@ -2835,6 +2835,7 @@ TEST_F(PGLogTrimTest, TestTrimAll)
 {
   SetUp(1, 2, 20);
   PGLog::IndexedLog log;
+  EXPECT_EQ(0u, log.dup_index.size()); // Sanity check
   log.head = mk_evt(24, 0);
   log.skip_can_rollback_to_to_head();
   log.head = mk_evt(9, 0);
@@ -2857,6 +2858,7 @@ TEST_F(PGLogTrimTest, TestTrimAll)
   EXPECT_EQ(6u, trimmed.size());
   EXPECT_EQ(5u, log.dups.size());
   EXPECT_EQ(0u, trimmed_dups.size());
+  EXPECT_EQ(0u, log.dup_index.size()); // dup_index entry should be trimmed
 }
 
 

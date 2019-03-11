@@ -1,5 +1,7 @@
-Dashboard Developer Documentation
-====================================
+Ceph Dashboard Developer Documentation
+======================================
+
+.. contents:: Table of Contents
 
 Frontend Development
 --------------------
@@ -16,7 +18,7 @@ Prerequisites
 ~~~~~~~~~~~~~
 
  * Node 8.9.0 or higher
- * NPM 5.5.1 or higher
+ * NPM 5.7.0 or higher
 
 nodeenv:
   During Ceph's build we create a virtualenv with ``node`` and ``npm``
@@ -63,6 +65,50 @@ Run ``npm run build`` to build the project. The build artifacts will be
 stored in the ``dist/`` directory. Use the ``-prod`` flag for a
 production build. Navigate to ``https://localhost:8443``.
 
+Code linting and formatting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We use the following tools to lint and format the code in all our TS, SCSS and
+HTML files:
+
+- `codelyzer <http://codelyzer.com/>`_
+- `html-linter <https://github.com/chinchiheather/html-linter>`_
+- `Prettier <https://prettier.io/>`_
+- `TSLint <https://palantir.github.io/tslint/>`_
+
+We added 2 npm scripts to help run these tools:
+
+- ``npm run lint``, will check frontend files against all linters
+- ``npm run fix``, will try to fix all the detected linting errors
+
+Writing Unit Tests
+~~~~~~~~~~~~~~~~~~
+
+To write unit tests most efficient we have a small collection of tools,
+we use within test suites.
+
+Those tools can be found under
+``src/pybind/mgr/dashboard/frontend/src/testing/``, especially take
+a look at ``unit-test-helper.ts``.
+
+There you will be able to find:
+
+``configureTestBed`` that replaces the initial ``TestBed``
+methods. It takes the same arguments as ``TestBed.configureTestingModule``.
+Using it will run your tests a lot faster in development, as it doesn't
+recreate everything from scratch on every test. To use the default behaviour
+pass ``true`` as the second argument.
+
+``PermissionHelper`` to help determine if
+the correct actions are shown based on the current permissions and selection
+in a list.
+
+``FormHelper`` which makes testing a form a lot easier
+with a few simple methods. It allows you to set a control or multiple
+controls, expect if a control is valid or has an error or just do both with
+one method. Additional you can expect a template element or multiple elements
+to be visible in the rendered template.
+
 Running Unit Tests
 ~~~~~~~~~~~~~~~~~~
 
@@ -72,6 +118,14 @@ Create ``unit-test-configuration.ts`` file based on
 
 Run ``npm run test`` to execute the unit tests via `Jest
 <https://facebook.github.io/jest/>`_.
+
+If you get errors on all tests, it could be because `Jest
+<https://facebook.github.io/jest/>`_ or something else was updated.
+There are a few ways how you can try to resolve this:
+
+- Remove all modules with ``rm -rf dist node_modules`` and run ``npm install``
+  again in order to reinstall them
+- Clear the cache of jest by running ``npx jest --clearCache``
 
 Running End-to-End Tests
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -100,6 +154,16 @@ Remote:
 Note:
   When using docker, as your device, you might need to run the script with sudo
   permissions.
+
+Writing End-to-End Tests
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+When writing e2e tests you don't want to recompile every time from scratch to
+try out if your test has succeeded. As usual you have your development server
+open (``npm start``) which already has compiled all files. To attach
+`Protractor <http://www.protractortest.org/>`__ to this process, instead of
+spinning up it's own server, you can use ``npm run e2e -- --dev-server-target``
+or just ``npm run e2e:dev`` which is equivalent.
 
 Further Help
 ~~~~~~~~~~~~
@@ -166,6 +230,180 @@ Example:
       Some <strong>helper</strong> html text
     </cd-helper>
 
+Frontend branding
+~~~~~~~~~~~~~~~~~
+
+Every vendor can customize the 'Ceph dashboard' to his needs. No matter if
+logo, HTML-Template or TypeScript, every file inside the frontend folder can be
+replaced.
+
+To replace files, open ``./frontend/angular.json`` and scroll to the section
+``fileReplacements`` inside the production configuration. Here you can add the
+files you wish to brand. We recommend to place the branded version of a file in
+the same directory as the original one and to add a ``.brand`` to the file
+name, right in front of the file extension. A ``fileReplacement`` could for
+example look like this:
+
+.. code:: javascript
+
+    {
+      "replace": "src/app/core/auth/login/login.component.html",
+      "with": "src/app/core/auth/login/login.component.brand.html"
+    }
+
+To serve or build the branded user interface run:
+
+    $ npm run start -- --prod
+
+or
+
+    $ npm run build -- --prod
+
+Unfortunately it's currently not possible to use multiple configurations when
+serving or building the UI at the same time. That means a configuration just
+for the branding ``fileReplacements`` is not an option, because you want to use
+the production configuration anyway
+(https://github.com/angular/angular-cli/issues/10612).
+Furthermore it's also not possible to use glob expressions for
+``fileReplacements``. As long as the feature hasn't been implemented, you have
+to add the file replacements manually to the angular.json file
+(https://github.com/angular/angular-cli/issues/12354).
+
+Nevertheless you should stick to the suggested naming scheme because it makes
+it easier for you to use glob expressions once it's supported in the future.
+
+To change the variable defaults you can overwrite them in the file
+``./frontend/src/vendor.variables.scss``. Just reassign the variable you want
+to change, for example ``$color-primary: teal;``
+To overwrite or extend the default CSS, you can add your own styles in
+``./frontend/src/vendor.overrides.scss``.
+
+I18N
+----
+
+How to extract messages from source code?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To extract the I18N messages from the templates and the TypeScript files just
+run the following command in ``src/pybind/mgr/dashboard/frontend``::
+
+  $ npm run i18n
+
+This will extract all marked messages from the HTML templates first and then
+add all marked strings from the TypeScript files to the translation template.
+Since the extraction from TypeScript files is still not supported by Angular
+itself, we are using the
+`ngx-translator <https://github.com/ngx-translate/i18n-polyfill>`_ extractor to
+parse the TypeScript files.
+
+When the command ran successfully, it should have created or updated the file
+``src/locale/messages.xlf``.
+
+To make sure this file is always up to date in master branch, we added a
+validation in ``run-frontend-unittests.sh`` that will fail if it finds
+uncommitted translations.
+
+Supported languages
+~~~~~~~~~~~~~~~~~~~
+
+All our supported languages should be registeredd in
+``supported-languages.enum.ts``, this will then provide that list to both the
+language selectors in the frontend.
+
+Translating process
+~~~~~~~~~~~~~~~~~~~
+
+To facilitate the translation process of the dashboard we are using a web tool
+called `transifex <https://www.transifex.com/>`_.
+
+If you wish to help translating to any language just go to our `transifex
+project page <https://www.transifex.com/ceph/ceph-dashboard/>`_, join the
+project and you can start translating immediately.
+
+All translations will then be reviewed and later pushed upstream.
+
+Updating translated messages
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Any time there are new messages translated and reviewed in a specific language
+we should update the translation file upstream.
+
+To do that, we need to download the language xlf file from transifex and replace
+the current one in the repository. Since Angular doesn't support missing
+translations, we need to do an extra step and fill all the untranslated strings
+with the source string.
+
+Each language file should be placed in ``src/locale/messages.<locale-id>.xlf``.
+For example, the path for german would be ``src/locale/messages.de-DE.xlf``.
+``<locale-id>`` should match the id previouisly inserted in
+``supported-languages.enum.ts``.
+
+Suggestions
+~~~~~~~~~~~
+
+Strings need to start and end in the same line as the element:
+
+.. code-block:: xml
+
+  <!-- avoid -->
+  <span i18n>
+    Foo
+  </span>
+
+  <!-- recommended -->
+  <span i18n>Foo</span>
+
+
+  <!-- avoid -->
+  <span i18n>
+    Foo bar baz.
+    Foo bar baz.
+  </span>
+
+  <!-- recommended -->
+  <span i18n>Foo bar baz.
+    Foo bar baz.</span>
+
+Isolated interpolations should not be translated:
+
+.. code-block:: xml
+
+  <!-- avoid -->
+  <span i18n>{{ foo }}</span>
+
+  <!-- recommended -->
+  <span>{{ foo }}</span>
+
+Interpolations used in a sentence should be kept in the translation:
+
+.. code-block:: xml
+
+  <!-- recommended -->
+  <span i18n>There are {{ x }} OSDs.</span>
+
+Remove elements that are outside the context of the translation:
+
+.. code-block:: xml
+
+  <!-- avoid -->
+  <label i18n>
+    Profile
+    <span class="required"></span>
+  </label>
+
+  <!-- recommended -->
+  <label>
+    <ng-container i18n>Profile<ng-container>
+    <span class="required"></span>
+  </label>
+
+Keep elements that affect the sentence:
+
+.. code-block:: xml
+
+  <!-- recommended -->
+  <span i18n>Profile <b>foo</b> will be removed.</span>
+
 Backend Development
 -------------------
 
@@ -203,10 +441,27 @@ Alternatively, you can use Python's native package installation method::
   $ pip install tox
   $ pip install coverage
 
-To run the tests, run ``tox`` in the dashboard directory (where ``tox.ini``
-is located).
+To run the tests, run ``run-tox.sh`` in the dashboard directory (where
+``tox.ini`` is located)::
 
-We also collect coverage information from the backend code. You can check the
+  ## Run Python 2+3 tests+lint commands:
+  $ ./run-tox.sh
+
+  ## Run Python 3 tests+lint commands:
+  $ WITH_PYTHON2=OFF ./run-tox.sh
+
+  ## Run Python 3 arbitrary command (e.g. 1 single test):
+  $ WITH_PYTHON2=OFF ./run-tox.sh pytest tests/test_rgw_client.py::RgwClientTest::test_ssl_verify
+
+You can also run tox instead of ``run-tox.sh``::
+
+  ## Run Python 3 tests command:
+  $ CEPH_BUILD_DIR=.tox tox -e py3-cov
+
+  ## Run Python 3 arbitrary command (e.g. 1 single test):
+  $ CEPH_BUILD_DIR=.tox tox -e py3-run pytest tests/test_rgw_client.py::RgwClientTest::test_ssl_verify
+
+We also collect coverage information from the backend code when you run tests. You can check the
 coverage information provided by the tox output, or by running the following
 command after tox has finished successfully::
 
@@ -215,36 +470,66 @@ command after tox has finished successfully::
 This command will create a directory ``htmlcov`` with an HTML representation of
 the code coverage of the backend.
 
-You can also run a single step of the tox script (aka tox environment), for
-instance if you only want to run the linting tools, do::
-
-  $ tox -e lint
-
 API tests based on Teuthology
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To run our API tests against a real Ceph cluster, we leverage the Teuthology framework. This
-has the advantage of catching bugs originated from changes in the internal Ceph
-code.
+How to run existing API tests:
+  To run the API tests against a real Ceph cluster, we leverage the Teuthology
+  framework. This has the advantage of catching bugs originated from changes in
+  the internal Ceph code.
 
+  Our ``run-backend-api-tests.sh`` script will start a ``vstart`` Ceph cluster
+  before running the Teuthology tests, and then it stops the cluster after the
+  tests are run. Of course this implies that you have built/compiled Ceph
+  previously.
 
-Our ``run-backend-api-tests.sh`` script will start a ``vstart`` Ceph cluster before running the
-Teuthology tests, and then it stops the cluster after the tests are run. Of
-course this implies that you have built/compiled Ceph previously.
+  Start all dashboard tests by running::
 
-Start all dashboard tests by running::
+    $ ./run-backend-api-tests.sh
 
-  $ ./run-backend-api-tests.sh
+  Or, start one or multiple specific tests by specifying the test name::
 
-Or, start one or multiple specific tests by specifying the test name::
+    $ ./run-backend-api-tests.sh tasks.mgr.dashboard.test_pool.PoolTest
 
-  $ ./run-backend-api-tests.sh tasks.mgr.dashboard.test_pool.PoolTest
+  Or, ``source`` the script and run the tests manually::
 
-Or, ``source`` the script and run the tests manually::
+    $ source run-backend-api-tests.sh
+    $ run_teuthology_tests [tests]...
+    $ cleanup_teuthology
 
-  $ source run-backend-api-tests.sh
-  $ run_teuthology_tests [tests]...
-  $ cleanup_teuthology
+How to write your own tests:
+  There are two possible ways to write your own API tests:
+
+  The first is by extending one of the existing test classes in the
+  ``qa/tasks/mgr/dashboard`` directory.
+
+  The second way is by adding your own API test module if you're creating a new
+  controller for example. To do so you'll just need to add the file containing
+  your new test class to the ``qa/tasks/mgr/dashboard`` directory and implement
+  all your tests here.
+
+  .. note:: Don't forget to add the path of the newly created module to
+    ``modules`` section in ``qa/suites/rados/mgr/tasks/dashboard.yaml``.
+
+  Short example: Let's assume you created a new controller called
+  ``my_new_controller.py`` and the related test module
+  ``test_my_new_controller.py``. You'll need to add
+  ``tasks.mgr.dashboard.test_my_new_controller`` to the ``modules`` section in
+  the ``dashboard.yaml`` file.
+
+  Also, if you're removing test modules please keep in mind to remove the
+  related section. Otherwise the Teuthology test run will fail.
+
+  Please run your API tests on your dev environment (as explained above)
+  before submitting a pull request. Also make sure that a full QA run in
+  Teuthology/sepia lab (based on your changes) has completed successfully
+  before it gets merged. You don't need to schedule the QA run yourself, just
+  add the 'needs-qa' label to your pull request as soon as you think it's ready
+  for merging (e.g. make check was successful, the pull request is approved and
+  all comments have been addressed). One of the developers who has access to
+  Teuthology/the sepia lab will take care of it and report the result back to
+  you.
+
 
 How to add a new controller?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -336,7 +621,7 @@ path parameters, query parameters, or body parameters.
 
 For ``GET`` and ``DELETE`` methods, the method's non-optional parameters are
 considered path parameters by default. Optional parameters are considered
-query parameters. By specifing the ``query_parameters`` in the endpoint
+query parameters. By specifying the ``query_parameters`` in the endpoint
 decorator it is possible to make a non-optional parameter to be a query
 parameter.
 
@@ -390,7 +675,7 @@ the ``post`` method case.
 Defining path parameters in endpoints's URLs using python methods's parameters
 is very easy but it is still a bit strict with respect to the position of these
 parameters in the URL structure.
-Sometimes we may want to explictly define a URL scheme that
+Sometimes we may want to explicitly define a URL scheme that
 contains path parameters mixed with static parts of the URL.
 Our controller infrastructure also supports the declaration of URL paths with
 explicit path parameters at both the controller level and method level.
@@ -502,6 +787,44 @@ same applies to other request types:
 | DELETE       | Yes        | delete         | 204         |
 +--------------+------------+----------------+-------------+
 
+How to use a custom API endpoint in a RESTController?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If you don't have any access restriction you can use ``@Endpoint``. If you
+have set a permission scope to restrict access to your endpoints,
+``@Endpoint`` will fail, as it doesn't know which permission property should be
+used. To use a custom endpoint inside a restricted ``RESTController`` use
+``@RESTController.Collection`` instead. You can also choose
+``@RESTController.Resource`` if you have set a ``RESOURCE_ID`` in your
+``RESTController`` class.
+
+.. code-block:: python
+
+  import cherrypy
+  from ..tools import ApiController, RESTController
+
+  @ApiController('ping', Scope.Ping)
+  class Ping(RESTController):
+    RESOURCE_ID = 'ping'
+
+    @RESTController.Resource('GET')
+    def some_get_endpoint(self):
+      return {"msg": "Hello"}
+
+    @RESTController.Collection('POST')
+    def some_post_endpoint(self, **data):
+      return {"msg": data}
+
+Both decorators also support four parameters to customize the
+endpoint:
+
+* ``method="GET"``: the HTTP method allowed to access this endpoint.
+* ``path="/<method_name>"``: the URL path of the endpoint, excluding the
+  controller URL path prefix.
+* ``status=200``: set the HTTP status response code
+* ``query_params=[]``: list of method parameter names that correspond to URL
+  query parameters.
+
 How to restrict access to a controller?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -563,7 +886,7 @@ If we want to write a unit test for the above ``Ping`` controller, create a
   class PingTest(ControllerTestCase):
       @classmethod
       def setup_test(cls):
-          Ping._cp_config['tools.authentication.on'] = False
+          Ping._cp_config['tools.authenticate.on'] = False
           cls.setup_controllers([Ping])
 
       def test_ping(self):
@@ -707,7 +1030,7 @@ The value of the class attribute is a pair composed by the default value for tha
 setting, and the python type of the value.
 
 By declaring the ``ADMIN_EMAIL_ADDRESS`` class attribute, when you restart the
-dashboard plugin, you will atomatically gain two additional CLI commands to
+dashboard module, you will automatically gain two additional CLI commands to
 get and set that setting::
 
   $ ceph dashboard get-admin-email-address
@@ -865,7 +1188,7 @@ additional parameter called ``executor``. The full method signature of
 
 
 The ``TaskExecutor`` class is responsible for code that executes a given task
-function, and defines three methods that can be overriden by
+function, and defines three methods that can be overridden by
 subclasses::
 
   def init(self, task)
@@ -1014,69 +1337,170 @@ updates its progress:
 How to deal with asynchronous tasks in the front-end?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-All executing and most recently finished asynchronous tasks are displayed on the
-"Backgroud-Tasks" menu.
+All executing and most recently finished asynchronous tasks are displayed on
+"Background-Tasks" and if finished on "Recent-Notifications" in the menu bar.
+For each task a operation name for three states (running, success and failure),
+a function that tells who is involved and error descriptions, if any, have to
+be provided. This can be  achieved by appending
+``TaskManagerMessageService.messages``.  This has to be done to achieve
+consistency among all tasks and states.
 
-The front-end developer should provide a description, success message and error
-messages for each task on ``TaskManagerMessageService.messages``.
-This messages can make use of the task metadata to provide more personalized messages.
+Operation Object
+  Ensures consistency among all tasks. It consists of three verbs for each
+  different state f.e.
+  ``{running: 'Creating', failure: 'create', success: 'Created'}``.
 
-When submitting an asynchronous task, the developer should provide a callback
-that will be automatically triggered after the execution of that task.
-This can be done by using the ``TaskManagerService.subscribe``.
+#. Put running operations in present participle f.e. ``'Updating'``.
+#. Failed messages always start with ``'Failed to '`` and should be continued
+   with the operation in present tense f.e. ``'update'``.
+#. Put successful operations in past tense f.e. ``'Updated'``.
 
-Most of the times, all we want to do after a task completes the execution, is
-displaying a notification message based on the execution result. The
-``NotificationService.notifyTask`` will use the messages from
-``TaskManagerMessageService`` to display a success / error message based on the
-execution result of a task.
+Involves Function
+  Ensures consistency among all messages of a task, it resembles who's
+  involved by the operation. It's a function that returns a string which
+  takes the metadata from the task to return f.e.
+  ``"RBD 'somePool/someImage'"``.
+
+Both combined create the following messages:
+
+* Failure => ``"Failed to create RBD 'somePool/someImage'"``
+* Running => ``"Creating RBD 'somePool/someImage'"``
+* Success => ``"Created RBD 'somePool/someImage'"``
+
+For automatic task handling use ``TaskWrapperService.wrapTaskAroundCall``.
+
+If for some reason ``wrapTaskAroundCall`` is not working for you,
+you have to subscribe to your asynchronous task manually through
+``TaskManagerService.subscribe``, and provide it with a callback,
+in case of a success to notify the user. A notification can
+be triggered with ``NotificationService.notifyTask``. It will use
+``TaskManagerMessageService.messages`` to display a message based on the state
+of a task.
+
+Notifications of API errors are handled by ``ApiInterceptorService``.
 
 Usage example:
 
 .. code-block:: javascript
 
   export class TaskManagerMessageService {
-
+    // ...
     messages = {
-      // Messages for 'rbd/create' task
+      // Messages for task 'rbd/create'
       'rbd/create': new TaskManagerMessage(
-        // Description
-        (metadata) => `Create RBD '${metadata.pool_name}/${metadata.image_name}'`,
-        // Success message
-        (metadata) => `RBD '${metadata.pool_name}/${metadata.image_name}'
-                       have been created successfully`,
-        // Error messages
-        (metadata) => {
-          return {
-            '17': `Name '${metadata.pool_name}/${metadata.image_name}' is already
-                   in use.`
-          };
-        }
+        // Message prefixes
+        ['create', 'Creating', 'Created'],
+        // Message suffix
+        (metadata) => `RBD '${metadata.pool_name}/${metadata.image_name}'`,
+        (metadata) => ({
+          // Error code and description
+          '17': `Name is already used by RBD '${metadata.pool_name}/${
+                 metadata.image_name}'.`
+        })
       ),
       // ...
     };
-
     // ...
   }
 
   export class RBDFormComponent {
     // ...
-
-    submit() {
-      // ...
-      this.rbdService.create(request).then((resp) => {
-        // Subscribe the submitted task
-        this.taskManagerService.subscribe('rbd/create',
-          {'pool_name': request.pool_name, 'rbd_name': request.name},
-          // Callback that will be invoked after task is finished
-          (finishedTask: FinishedTask) => {
-            // Will display a notification message (success or error)
-            this.notificationService.notifyTask(finishedTask, finishedTask.ret_value.success);
-          });
-        // ...
-      })
+    createAction() {
+      const request = this.createRequest();
+      // Subscribes to 'call' with submitted 'task' and handles notifications
+      return this.taskWrapper.wrapTaskAroundCall({
+        task: new FinishedTask('rbd/create', {
+          pool_name: request.pool_name,
+          image_name: request.name
+        }),
+        call: this.rbdService.create(request)
+      });
     }
+    // ...
   }
+
+
+REST API documentation
+~~~~~~~~~~~~~~~~~~~~~~
+There is an automatically generated Swagger UI page for documentation of the REST
+API endpoints.However, by default it is not very detailed. There are two
+decorators that can be used to add more information:
+
+* ``@EndpointDoc()`` for documentation of endpoints. It has four optional arguments
+  (explained below): ``description``, ``group``, ``parameters`` and``responses``.
+* ``@ControllerDoc()`` for documentation of controller or group associated with 
+  the endpoints. It only takes the two first arguments: ``description`` and``group``.
+
+
+``description``: A a string with a short (1-2 sentences) description of the object.
+
+
+``group``: By default, an endpoint is grouped together with other endpoints
+within the same controller class. ``group`` is a string that can be used to
+assign an endpoint or all endpoints in a class to another controller or a 
+conceived group name.
+
+
+``parameters``: A dict used to describe path, query or request body parameters.
+By default, all parameters for an endpoint are listed on the Swagger UI page,
+including information of whether the parameter is optional/required and default
+values. However, there will be no description of the parameter and the parameter
+type will only be displayed in some cases.
+When adding information, each parameters should be described as in the example
+below. Note that the parameter type should be expressed as a built-in python
+type and not as a string. Allowed values are ``str``, ``int``, ``bool``, ``float``.
+
+.. code-block:: python
+
+ @EndpointDoc(parameters={'my_string': (str, 'Description of my_string')})
+
+For body parameters, more complex cases are possible. If the parameter is a
+dictionary, the type should be replaced with a ``dict`` containing its nested
+parameters. When describing nested parameters, the same format as other
+parameters is used. However, all nested parameters are set as required by default.
+If the nested parameter is optional this must be specified as for ``item2`` in
+the example below. If a nested parameters is set to optional, it is also
+possible to specify the default value (this will not be provided automatically
+for nested parameters).
+
+.. code-block:: python
+
+  @EndpointDoc(parameters={
+    'my_dictionary': ({
+      'item1': (str, 'Description of item1'),
+      'item2': (str, 'Description of item2', True),  # item2 is optional
+      'item3': (str, 'Description of item3', True, 'foo'),  # item3 is optional with 'foo' as default value
+  }, 'Description of my_dictionary')})
+ 
+If the parameter is a ``list`` of primitive types, the type should be
+surrounded with square brackets.
+
+.. code-block:: python
+
+  @EndpointDoc(parameters={'my_list': ([int], 'Description of my_list')})
+
+If the parameter is a ``list`` with nested parameters, the nested parameters
+should be placed in a dictionary and surrounded with square brackets.
+
+.. code-block:: python
+
+  @EndpointDoc(parameters={
+    'my_list': ([{
+      'list_item': (str, 'Description of list_item'),
+      'list_item2': (str, 'Description of list_item2')
+  }], 'Description of my_list')})
+
+
+``responses``: A dict used for describing responses. Rules for describing
+responses are the same as for request body parameters, with one difference:
+responses also needs to be assigned to the related response code as in the
+example below:
+
+.. code-block:: python
+
+  @EndpointDoc(responses={
+    '400':{'my_response': (str, 'Description of my_response')}
+
 
 Error Handling in Python
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1156,3 +1580,87 @@ will end up as internal server errors in the API.
 In general, do not ``return`` error responses in the REST API. They will be
 returned by the  error handler. Instead, raise the appropriate exception.
 
+Plug-ins
+~~~~~~~~
+
+New functionality can be provided by means of a plug-in architecture. Among the
+benefits this approach brings in, loosely coupled development is one of the most
+notable. As the Ceph Dashboard grows in feature richness, its code-base becomes
+more and more complex. The hook-based nature of a plug-in architecture allows to
+extend functionality in a controlled manner, and isolate the scope of the
+changes.
+
+Ceph Dashboard relies on `Pluggy <https://pluggy.readthedocs.io>`_ to provide
+for plug-ing support. On top of pluggy, an interface-based approach has been
+implemented, with some safety checks (method override and abstract method
+checks).
+
+In order to create a new plugin, the following steps are required:
+
+#. Add a new file under ``src/pybind/mgr/dashboard/plugins``.
+#. Import the ``PLUGIN_MANAGER`` instance and the ``Interfaces``.
+#. Create a class extending the desired interfaces. The plug-in library will check if all the methods of the interfaces have been properly overridden.
+#. Register the plugin in the ``PLUGIN_MANAGER`` instance.
+#. Import the plug-in from within the Ceph Dashboard ``module.py`` (currently no dynamic loading is implemented).
+
+The available interfaces are the following:
+
+- ``CanMgr``: provides the plug-in with access to the ``mgr`` instance under ``self.mgr``.
+- ``CanLog``: provides the plug-in with access to the Ceph Dashboard logger under ``self.log``.
+- ``Setupable``: requires overriding ``setup()`` hook. This method is run in the Ceph Dashboard ``serve()`` method, right after CherryPy has been configured, but before it is started. It's a placeholder for the plug-in initialization logic.
+- ``HasOptions``: requires overriding ``get_options()`` hook by returning a list of ``Options()``. The options returned here are added to the ``MODULE_OPTIONS``.
+- ``HasCommands``: requires overriding ``register_commands()`` hook by defining the commands the plug-in can handle and decorating them with ``@CLICommand`. The commands can be optionally returned, so that they can be invoked externally (which makes unit testing easier).
+- ``HasControllers``: requires overriding ``get_controllers()`` hook by defining and returning the controllers as usual.
+- ``FilterRequest.BeforeHandler``: requires overriding ``filter_request_before_handler()`` hook. This method receives a ``cherrypy.request`` object for processing. A usual implementation of this method will allow some requests to pass or will raise a ``cherrypy.HTTPError` based on the ``request`` metadata and other conditions.
+
+New interfaces and hooks should be added as soon as they are required to
+implement new functionality. The above list only comprises the hooks needed for
+the existing plugins.
+
+A sample plugin implementation would look like this:
+
+.. code-block:: python
+
+  # src/pybind/mgr/dashboard/plugins/mute.py
+
+  from . import PLUGIN_MANAGER as PM
+  from . import interfaces as I
+
+  from mgr_module import CLICommand, Option
+  import cherrypy
+
+  @PM.add_plugin
+  class Mute(I.CanMgr, I.CanLog, I.Setupable, I.HasOptions,
+                       I.HasCommands, I.FilterRequest.BeforeHandler,
+                       I.HasControllers):
+    @PM.add_hook
+    def get_options(self):
+      return [Option('mute', default=False, type='bool')]
+
+    @PM.add_hook
+    def setup(self):
+      self.mute = self.mgr.get_module_options('mute')
+
+    @PM.add_hook
+    def register_commands(self):
+      @CLICommand("dashboard mute")
+      def _(mgr):
+        self.mute = True
+        self.mgr.set_module_options('mute', True)
+        return 0
+
+    @PM.add_hook
+    def filter_request_before_handler(self, request):
+      if self.mute:
+        raise cherrypy.HTTPError(500, "I'm muted :-x")
+
+    @PM.add_hook
+    def get_controllers(self):
+      from ..controllers import ApiController, RESTController
+
+      @ApiController('/mute')
+      class MuteController(RESTController):
+        def get(_):
+          return self.mute
+
+      return [FeatureTogglesEndpoint]

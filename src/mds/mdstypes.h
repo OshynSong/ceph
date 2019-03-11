@@ -28,7 +28,7 @@
 
 #include <boost/spirit/include/qi.hpp>
 #include <boost/pool/pool.hpp>
-#include "include/assert.h"
+#include "include/ceph_assert.h"
 #include <boost/serialization/strong_typedef.hpp>
 
 #define CEPH_FS_ONDISK_MAGIC "ceph fs volume v011"
@@ -75,14 +75,15 @@
 
 
 typedef int32_t mds_rank_t;
-typedef int32_t fs_cluster_id_t;
+constexpr mds_rank_t MDS_RANK_NONE = -1;
 
 BOOST_STRONG_TYPEDEF(uint64_t, mds_gid_t)
 extern const mds_gid_t MDS_GID_NONE;
-constexpr fs_cluster_id_t FS_CLUSTER_ID_NONE = {-1};
+
+typedef int32_t fs_cluster_id_t;
+constexpr fs_cluster_id_t FS_CLUSTER_ID_NONE = -1;
 // The namespace ID of the anonymous default filesystem from legacy systems
-constexpr fs_cluster_id_t FS_CLUSTER_ID_ANONYMOUS = {0};
-extern const mds_rank_t MDS_RANK_NONE;
+constexpr fs_cluster_id_t FS_CLUSTER_ID_ANONYMOUS = 0;
 
 class mds_role_t
 {
@@ -543,7 +544,7 @@ struct inode_t {
 
   bool is_truncating() const { return (truncate_pending > 0); }
   void truncate(uint64_t old_size, uint64_t new_size) {
-    assert(new_size < old_size);
+    ceph_assert(new_size < old_size);
     if (old_size > max_size_ever)
       max_size_ever = old_size;
     truncate_from = old_size;
@@ -861,7 +862,7 @@ void inode_t<Allocator>::generate_test_instances(list<inode_t*>& ls)
 template<template<typename> class Allocator>
 int inode_t<Allocator>::compare(const inode_t<Allocator> &other, bool *divergent) const
 {
-  assert(ino == other.ino);
+  ceph_assert(ino == other.ino);
   *divergent = false;
   if (version == other.version) {
     if (rdev != other.rdev ||
@@ -899,7 +900,7 @@ int inode_t<Allocator>::compare(const inode_t<Allocator> &other, bool *divergent
     *divergent = !older_is_consistent(other);
     return 1;
   } else {
-    assert(version < other.version);
+    ceph_assert(version < other.version);
     *divergent = !other.older_is_consistent(*this);
     return -1;
   }
@@ -1059,21 +1060,114 @@ inline std::ostream& operator<<(std::ostream& out, const old_rstat_t& o) {
   return out << "old_rstat(first " << o.first << " " << o.rstat << " " << o.accounted_rstat << ")";
 }
 
+/*
+ * feature_bitset_t
+ */
+class feature_bitset_t {
+public:
+  typedef uint64_t block_type;
+  static const size_t bits_per_block = sizeof(block_type) * 8;
+
+  feature_bitset_t(const feature_bitset_t& other) : _vec(other._vec) {}
+  feature_bitset_t(feature_bitset_t&& other) : _vec(std::move(other._vec)) {}
+  feature_bitset_t(unsigned long value = 0);
+  feature_bitset_t(const vector<size_t>& array);
+  feature_bitset_t& operator=(const feature_bitset_t& other) {
+    _vec = other._vec;
+    return *this;
+  }
+  feature_bitset_t& operator=(feature_bitset_t&& other) {
+    _vec = std::move(other._vec);
+    return *this;
+  }
+  bool empty() const {
+    for (auto& v : _vec) {
+      if (v)
+	return false;
+    }
+    return true;
+  }
+  bool test(size_t bit) const {
+    if (bit >= bits_per_block * _vec.size())
+      return false;
+    return _vec[bit / bits_per_block] & ((block_type)1 << (bit % bits_per_block));
+  }
+  void clear() {
+    _vec.clear();
+  }
+  feature_bitset_t& operator-=(const feature_bitset_t& other);
+  void encode(bufferlist& bl) const;
+  void decode(bufferlist::const_iterator &p);
+  void print(ostream& out) const;
+private:
+  vector<block_type> _vec;
+};
+WRITE_CLASS_ENCODER(feature_bitset_t)
+
+inline std::ostream& operator<<(std::ostream& out, const feature_bitset_t& s) {
+  s.print(out);
+  return out;
+}
+
+/*
+ * client_metadata_t
+ */
+struct client_metadata_t {
+  using kv_map_t = std::map<std::string,std::string>;
+  using iterator = kv_map_t::const_iterator;
+
+  kv_map_t kv_map;
+  feature_bitset_t features;
+
+  client_metadata_t() {}
+  client_metadata_t(const client_metadata_t& other) :
+    kv_map(other.kv_map), features(other.features) {}
+  client_metadata_t(client_metadata_t&& other) :
+    kv_map(std::move(other.kv_map)), features(std::move(other.features)) {}
+  client_metadata_t(kv_map_t&& kv, feature_bitset_t &&f) :
+    kv_map(std::move(kv)), features(std::move(f)) {}
+  client_metadata_t(const kv_map_t& kv, const feature_bitset_t &f) :
+    kv_map(kv), features(f) {}
+  client_metadata_t& operator=(const client_metadata_t& other) {
+    kv_map = other.kv_map;
+    features = other.features;
+    return *this;
+  }
+
+  bool empty() const { return kv_map.empty() && features.empty(); }
+  iterator find(const std::string& key) const { return kv_map.find(key); }
+  iterator begin() const { return kv_map.begin(); }
+  iterator end() const { return kv_map.end(); }
+  std::string& operator[](const std::string& key) { return kv_map[key]; }
+  void merge(const client_metadata_t& other) {
+    kv_map.insert(other.kv_map.begin(), other.kv_map.end());
+    features = other.features;
+  }
+  void clear() {
+    kv_map.clear();
+    features.clear();
+  }
+
+  void encode(bufferlist& bl) const;
+  void decode(bufferlist::const_iterator& p);
+  void dump(Formatter *f) const;
+};
+WRITE_CLASS_ENCODER(client_metadata_t)
 
 /*
  * session_info_t
  */
-
 struct session_info_t {
   entity_inst_t inst;
   std::map<ceph_tid_t,inodeno_t> completed_requests;
   interval_set<inodeno_t> prealloc_inos;   // preallocated, ready to use.
   interval_set<inodeno_t> used_inos;       // journaling use
-  std::map<std::string, std::string> client_metadata;
+  client_metadata_t client_metadata;
   std::set<ceph_tid_t> completed_flushes;
   EntityName auth_name;
 
   client_t get_client() const { return client_t(inst.name.num()); }
+  bool has_feature(size_t bit) const { return client_metadata.features.test(bit); }
   const entity_name_t& get_source() const { return inst.name; }
 
   void clear_meta() {
@@ -1081,6 +1175,7 @@ struct session_info_t {
     used_inos.clear();
     completed_requests.clear();
     completed_flushes.clear();
+    client_metadata.clear();
   }
 
   void encode(bufferlist& bl, uint64_t features) const;
@@ -1131,7 +1226,7 @@ struct dentry_key_t {
   }
   static void decode_helper(std::string_view key, string& nm, snapid_t& sn) {
     size_t i = key.find_last_of('_');
-    assert(i != string::npos);
+    ceph_assert(i != string::npos);
     if (key.compare(i+1, std::string_view::npos, "head") == 0) {
       // name_head
       sn = CEPH_NOSNAP;
@@ -1174,7 +1269,6 @@ struct string_snap_t {
   snapid_t snapid;
   string_snap_t() {}
   string_snap_t(std::string_view n, snapid_t s) : name(n), snapid(s) {}
-  string_snap_t(const char *n, snapid_t s) : name(n), snapid(s) {}
 
   void encode(bufferlist& bl) const;
   void decode(bufferlist::const_iterator& p);
@@ -1297,6 +1391,26 @@ struct cap_reconnect_t {
 };
 WRITE_CLASS_ENCODER(cap_reconnect_t)
 
+struct snaprealm_reconnect_t {
+  mutable ceph_mds_snaprealm_reconnect realm;
+
+  snaprealm_reconnect_t() {
+    memset(&realm, 0, sizeof(realm));
+  }
+  snaprealm_reconnect_t(inodeno_t ino, snapid_t seq, inodeno_t parent) {
+    realm.ino = ino;
+    realm.seq = seq;
+    realm.parent = parent;
+  }
+  void encode(bufferlist& bl) const;
+  void decode(bufferlist::const_iterator& bl);
+  void encode_old(bufferlist& bl) const;
+  void decode_old(bufferlist::const_iterator& bl);
+
+  void dump(Formatter *f) const;
+  static void generate_test_instances(list<snaprealm_reconnect_t*>& ls);
+};
+WRITE_CLASS_ENCODER(snaprealm_reconnect_t)
 
 // compat for pre-FLOCK feature
 struct old_ceph_mds_cap_reconnect {

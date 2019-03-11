@@ -48,7 +48,7 @@ void GetLockerRequest<I>::send_get_lockers() {
     create_rados_callback<klass, &klass::handle_get_lockers>(this);
   m_out_bl.clear();
   int r = m_ioctx.aio_operate(m_oid, rados_completion, &op, &m_out_bl);
-  assert(r == 0);
+  ceph_assert(r == 0);
   rados_completion->release();
 }
 
@@ -105,7 +105,7 @@ void GetLockerRequest<I>::handle_get_lockers(int r) {
 
   m_locker->entity = iter->first.locker;
   m_locker->cookie = iter->first.cookie;
-  m_locker->address = stringify(iter->second.addr);
+  m_locker->address = iter->second.addr.get_legacy_str();
   if (m_locker->cookie.empty() || m_locker->address.empty()) {
     ldout(m_cct, 20) << "no valid lockers detected" << dendl;
     finish(-ENOENT);

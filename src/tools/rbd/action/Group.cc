@@ -75,13 +75,13 @@ void add_group_spec_options(po::options_description *pos,
     pos->add_options()
       ((get_name_prefix(modifier) + GROUP_SPEC).c_str(),
        (get_description_prefix(modifier) + "group specification\n" +
-         "(example: [<pool-name>/[<namespace-name>/]]<group-name>)").c_str());
+         "(example: [<pool-name>/[<namespace>/]]<group-name>)").c_str());
   } else {
     add_snap_option(opt, modifier);
     pos->add_options()
       ((get_name_prefix(modifier) + GROUP_SNAP_SPEC).c_str(),
        (get_description_prefix(modifier) + "group specification\n" +
-         "(example: [<pool-name>/[<namespace-name>/]]<group-name>@<snap-name>)").c_str());
+         "(example: [<pool-name>/[<namespace>/]]<group-name>@<snap-name>)").c_str());
   }
 }
 
@@ -120,13 +120,17 @@ int execute_create(const po::variables_map &vm,
 
 int execute_list(const po::variables_map &vm,
                  const std::vector<std::string> &ceph_global_init_args) {
-
+  std::string pool_name;
+  std::string namespace_name;
   size_t arg_index = 0;
-  std::string pool_name = utils::get_pool_name(vm, &arg_index);
-  std::string namespace_name = utils::get_namespace_name(vm, nullptr);
+  int r = utils::get_pool_and_namespace_names(vm, true, false, &pool_name,
+                                              &namespace_name, &arg_index);
+  if (r < 0) {
+    return r;
+  }
 
   at::Format::Formatter formatter;
-  int r = utils::get_formatter(vm, &formatter);
+  r = utils::get_formatter(vm, &formatter);
   if (r < 0) {
     return r;
   }
@@ -428,6 +432,16 @@ int execute_list_images(const po::variables_map &vm,
   if (r < 0)
     return r;
 
+  std::sort(images.begin(), images.end(),
+    [](const librbd::group_image_info_t &lhs,
+       const librbd::group_image_info_t &rhs) {
+      if (lhs.pool != rhs.pool) {
+        return lhs.pool < rhs.pool;
+      }
+      return lhs.name < rhs.name;
+    }
+  );
+
   if (f)
     f->open_array_section("images");
 
@@ -683,6 +697,47 @@ int execute_group_snap_list(const po::variables_map &vm,
   return 0;
 }
 
+int execute_group_snap_rollback(const po::variables_map &vm,
+                                const std::vector<std::string> &global_args) {
+  size_t arg_index = 0;
+
+  std::string group_name;
+  std::string namespace_name;
+  std::string pool_name;
+  std::string snap_name;
+
+  int r = utils::get_pool_generic_snapshot_names(
+    vm, at::ARGUMENT_MODIFIER_NONE, &arg_index, at::POOL_NAME, &pool_name,
+    &namespace_name, GROUP_NAME, "group", &group_name, &snap_name, true,
+    utils::SNAPSHOT_PRESENCE_REQUIRED, utils::SPEC_VALIDATION_FULL);
+  if (r < 0) {
+    return r;
+  }
+
+  librados::IoCtx io_ctx;
+  librados::Rados rados;
+
+  r = utils::init(pool_name, namespace_name, &rados, &io_ctx);
+  if (r < 0) {
+    return r;
+  }
+
+  librbd::RBD rbd;
+  utils::ProgressContext pc("Rolling back to group snapshot",
+                            vm[at::NO_PROGRESS].as<bool>());
+  r = rbd.group_snap_rollback_with_progress(io_ctx, group_name.c_str(),
+                                            snap_name.c_str(), pc);
+  if (r < 0) {
+    pc.fail();
+    std::cerr << "rbd: rollback group to snapshot failed: "
+              << cpp_strerror(r) << std::endl;
+    return r;
+  }
+
+  pc.finish();
+  return 0;
+}
+
 void get_create_arguments(po::options_description *positional,
                           po::options_description *options) {
   add_group_spec_options(positional, options, at::ARGUMENT_MODIFIER_NONE,
@@ -697,8 +752,7 @@ void get_remove_arguments(po::options_description *positional,
 
 void get_list_arguments(po::options_description *positional,
                         po::options_description *options) {
-  at::add_pool_option(options, at::ARGUMENT_MODIFIER_NONE);
-  at::add_namespace_options(nullptr, options);
+  at::add_pool_options(positional, options, true);
   at::add_format_options(options);
 }
 
@@ -715,7 +769,7 @@ void get_add_arguments(po::options_description *positional,
   positional->add_options()
     (GROUP_SPEC.c_str(),
      "group specification\n"
-     "(example: [<pool-name>/[<namespace-name>/]]<group-name>)");
+     "(example: [<pool-name>/[<namespace>/]]<group-name>)");
 
   add_prefixed_pool_option(options, "group");
   add_prefixed_namespace_option(options, "group");
@@ -724,7 +778,7 @@ void get_add_arguments(po::options_description *positional,
   positional->add_options()
     (at::IMAGE_SPEC.c_str(),
      "image specification\n"
-     "(example: [<pool-name>/[<namespace-name>/]]<image-name>)");
+     "(example: [<pool-name>/[<namespace>/]]<image-name>)");
 
   add_prefixed_pool_option(options, "image");
   add_prefixed_namespace_option(options, "image");
@@ -739,7 +793,7 @@ void get_remove_image_arguments(po::options_description *positional,
   positional->add_options()
     (GROUP_SPEC.c_str(),
      "group specification\n"
-     "(example: [<pool-name>/[<namespace-name>/]]<group-name>)");
+     "(example: [<pool-name>/[<namespace>/]]<group-name>)");
 
   add_prefixed_pool_option(options, "group");
   add_prefixed_namespace_option(options, "group");
@@ -748,7 +802,7 @@ void get_remove_image_arguments(po::options_description *positional,
   positional->add_options()
     (at::IMAGE_SPEC.c_str(),
      "image specification\n"
-     "(example: [<pool-name>/[<namespace-name>/]]<image-name>)");
+     "(example: [<pool-name>/[<namespace>/]]<image-name>)");
 
   add_prefixed_pool_option(options, "image");
   add_prefixed_namespace_option(options, "image");
@@ -796,6 +850,13 @@ void get_group_snap_list_arguments(po::options_description *positional,
                          false);
 }
 
+void get_group_snap_rollback_arguments(po::options_description *positional,
+                                       po::options_description *options) {
+  at::add_no_progress_option(options);
+  add_group_spec_options(positional, options, at::ARGUMENT_MODIFIER_NONE,
+                         true);
+}
+
 Shell::Action action_create(
   {"group", "create"}, {}, "Create a group.",
   "", &get_create_arguments, &execute_create);
@@ -833,6 +894,10 @@ Shell::Action action_group_snap_list(
   {"group", "snap", "list"}, {"group", "snap", "ls"},
   "List snapshots of a group.",
   "", &get_group_snap_list_arguments, &execute_group_snap_list);
+Shell::Action action_group_snap_rollback(
+  {"group", "snap", "rollback"}, {},
+  "Rollback group to snapshot.",
+  "", &get_group_snap_rollback_arguments, &execute_group_snap_rollback);
 
 } // namespace group
 } // namespace action

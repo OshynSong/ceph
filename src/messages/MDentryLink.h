@@ -18,7 +18,12 @@
 
 #include <string_view>
 
-class MDentryLink : public Message {
+#include "msg/Message.h"
+
+class MDentryLink : public MessageInstance<MDentryLink> {
+public:
+  friend factory;
+private:
   dirfrag_t subtree;
   dirfrag_t dirfrag;
   string dn;
@@ -32,19 +37,19 @@ class MDentryLink : public Message {
 
   bufferlist bl;
 
+protected:
   MDentryLink() :
-    Message(MSG_MDS_DENTRYLINK) { }
+    MessageInstance(MSG_MDS_DENTRYLINK) { }
   MDentryLink(dirfrag_t r, dirfrag_t df, std::string_view n, bool p) :
-    Message(MSG_MDS_DENTRYLINK),
+    MessageInstance(MSG_MDS_DENTRYLINK),
     subtree(r),
     dirfrag(df),
     dn(n),
     is_primary(p) {}
-private:
   ~MDentryLink() override {}
 
 public:
-  const char *get_type_name() const override { return "dentry_link";}
+  std::string_view get_type_name() const override { return "dentry_link";}
   void print(ostream& o) const override {
     o << "dentry_link(" << dirfrag << " " << dn << ")";
   }

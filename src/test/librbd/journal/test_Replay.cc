@@ -142,8 +142,8 @@ TEST_F(TestJournalReplay, AioDiscardEvent) {
 
   // inject a discard operation into the journal
   inject_into_journal(ictx,
-                      librbd::journal::AioDiscardEvent(0, payload.size(),
-                                                       ictx->skip_partial_discard));
+                      librbd::journal::AioDiscardEvent(
+                        0, payload.size(), ictx->discard_granularity_bytes));
   close_image(ictx);
 
   // re-open the journal so that it replays the new entry
@@ -155,7 +155,7 @@ TEST_F(TestJournalReplay, AioDiscardEvent) {
                                 librbd::io::ReadResult{read_result}, 0);
   ASSERT_EQ(0, aio_comp->wait_for_complete());
   aio_comp->release();
-  if (ictx->skip_partial_discard) {
+  if (ictx->discard_granularity_bytes > 0) {
     ASSERT_EQ(payload, read_payload);
   } else {
     ASSERT_EQ(std::string(read_payload.size(), '\0'), read_payload);
@@ -170,11 +170,11 @@ TEST_F(TestJournalReplay, AioDiscardEvent) {
 
   // replay several envents and check the commit position
   inject_into_journal(ictx,
-                      librbd::journal::AioDiscardEvent(0, payload.size(),
-                                                       ictx->skip_partial_discard));
+                      librbd::journal::AioDiscardEvent(
+                        0, payload.size(), ictx->discard_granularity_bytes));
   inject_into_journal(ictx,
-                      librbd::journal::AioDiscardEvent(0, payload.size(),
-                                                       ictx->skip_partial_discard));
+                      librbd::journal::AioDiscardEvent(
+                        0, payload.size(), ictx->discard_granularity_bytes));
   close_image(ictx);
 
   ASSERT_EQ(0, open_image(m_image_name, &ictx));
@@ -186,7 +186,7 @@ TEST_F(TestJournalReplay, AioDiscardEvent) {
   // verify lock ordering constraints
   aio_comp = new librbd::io::AioCompletion();
   ictx->io_work_queue->aio_discard(aio_comp, 0, read_payload.size(),
-                                   ictx->skip_partial_discard);
+                                   ictx->discard_granularity_bytes);
   ASSERT_EQ(0, aio_comp->wait_for_complete());
   aio_comp->release();
 }
@@ -755,7 +755,7 @@ TEST_F(TestJournalReplay, MetadataSet) {
   ASSERT_EQ(initial_tag + 1, current_tag);
   ASSERT_EQ(1, current_entry);
 
-  ASSERT_EQ(9876, ictx->mirroring_replay_delay);
+  ASSERT_EQ(9876U, ictx->mirroring_replay_delay);
 
   std::string value;
   ASSERT_EQ(0, librbd::metadata_get(ictx, "conf_rbd_mirroring_replay_delay",
@@ -797,7 +797,7 @@ TEST_F(TestJournalReplay, MetadataRemove) {
   get_journal_commit_position(ictx, &current_tag, &current_entry);
   ASSERT_EQ(initial_tag, current_tag);
   ASSERT_EQ(initial_entry + 2, current_entry);
-  ASSERT_EQ(0, ictx->mirroring_replay_delay);
+  ASSERT_EQ(0U, ictx->mirroring_replay_delay);
 
   std::string value;
   ASSERT_EQ(-ENOENT,

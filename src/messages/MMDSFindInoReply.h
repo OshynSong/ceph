@@ -18,14 +18,20 @@
 #include "msg/Message.h"
 #include "include/filepath.h"
 
-struct MMDSFindInoReply : public Message {
+class MMDSFindInoReply : public MessageInstance<MMDSFindInoReply> {
+public:
+  friend factory;
+
   ceph_tid_t tid = 0;
   filepath path;
 
-  MMDSFindInoReply() : Message(MSG_MDS_FINDINOREPLY) {}
-  MMDSFindInoReply(ceph_tid_t t) : Message(MSG_MDS_FINDINOREPLY), tid(t) {}
+protected:
+  MMDSFindInoReply() : MessageInstance(MSG_MDS_FINDINOREPLY) {}
+  MMDSFindInoReply(ceph_tid_t t) : MessageInstance(MSG_MDS_FINDINOREPLY), tid(t) {}
+  ~MMDSFindInoReply() override {}
 
-  const char *get_type_name() const override { return "findinoreply"; }
+public:
+  std::string_view get_type_name() const override { return "findinoreply"; }
   void print(ostream &out) const override {
     out << "findinoreply(" << tid << " " << path << ")";
   }

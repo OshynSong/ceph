@@ -13,6 +13,7 @@ import { Observable, throwError as observableThrowError } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
 import { NotificationType } from '../enum/notification-type.enum';
+import { CdNotificationConfig } from '../models/cd-notification';
 import { FinishedTask } from '../models/finished-task';
 import { AuthStorageService } from './auth-storage.service';
 import { NotificationService } from './notification.service';
@@ -55,23 +56,14 @@ export class ApiInterceptorService implements HttpInterceptor {
             case 401:
               this.authStorageService.remove();
               this.router.navigate(['/login']);
+              showNotification = false;
               break;
             case 403:
               this.router.navigate(['/403']);
               break;
-            case 404:
-              this.router.navigate(['/404']);
-              break;
           }
 
-          let timeoutId;
-          if (showNotification) {
-            timeoutId = this.notificationService.show(
-              NotificationType.error,
-              resp.error.detail || '',
-              `${resp.status} - ${resp.statusText}`
-            );
-          }
+          const timeoutId = showNotification ? this.prepareNotification(resp) : undefined;
 
           /**
            * Decorated preventDefault method (in case error previously had
@@ -96,5 +88,25 @@ export class ApiInterceptorService implements HttpInterceptor {
         return observableThrowError(resp);
       })
     );
+  }
+
+  private prepareNotification(resp): number {
+    return this.notificationService.show(() => {
+      let message = '';
+      if (_.isPlainObject(resp.error) && _.isString(resp.error.detail)) {
+        message = resp.error.detail; // Error was triggered by the backend.
+      } else if (_.isString(resp.error)) {
+        message = resp.error;
+      } else if (_.isString(resp.message)) {
+        message = resp.message;
+      }
+      return new CdNotificationConfig(
+        NotificationType.error,
+        `${resp.status} - ${resp.statusText}`,
+        message,
+        undefined,
+        resp['application']
+      );
+    });
   }
 }

@@ -14,12 +14,10 @@
 #ifndef JOURNAL_SCANNER_H
 #define JOURNAL_SCANNER_H
 
+#include "include/rados/librados_fwd.hpp"
+
 // For Journaler::Header, can't forward-declare nested classes
 #include <osdc/Journaler.h>
-
-namespace librados {
-  class IoCtx;
-}
 
 #include "JournalFilter.h"
 
@@ -65,6 +63,7 @@ class JournalScanner
     io(io_),
     rank(rank_),
     type(type_),
+    filter(type_),
     is_mdlog(false),
     pointer_present(false),
     pointer_valid(false),
@@ -86,12 +85,12 @@ class JournalScanner
 
   // The results of the scan
   inodeno_t ino;  // Corresponds to journal ino according their type
-  class EventRecord {
-    public:
-    EventRecord() : log_event(NULL), raw_size(0) {}
-    EventRecord(LogEvent *le, uint32_t rs) : log_event(le), raw_size(rs) {}
-    LogEvent *log_event;
-    uint32_t raw_size;  //< Size from start offset including all encoding overhead
+  struct EventRecord {
+    EventRecord(std::unique_ptr<LogEvent> le, uint32_t rs) : log_event(std::move(le)), raw_size(rs) {}
+    EventRecord(std::unique_ptr<PurgeItem> p, uint32_t rs) : pi(std::move(p)), raw_size(rs) {}
+    std::unique_ptr<LogEvent> log_event;
+    std::unique_ptr<PurgeItem> pi;
+    uint32_t raw_size = 0;  //< Size from start offset including all encoding overhead
   };
 
   class EventError {

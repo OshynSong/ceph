@@ -53,7 +53,7 @@ public:
   const char** get_tracked_conf_keys() const override {
     return ptrs;
   }
-  void handle_conf_change(const md_config_t *conf,
+  void handle_conf_change(const ConfigProxy& conf,
 			  const std::set <std::string> &changed) override {
   }
 };
@@ -73,17 +73,17 @@ class NetworkWorkerTest : public ::testing::TestWithParam<const char*> {
   void SetUp() override {
     cerr << __func__ << " start set up " << GetParam() << std::endl;
     if (strncmp(GetParam(), "dpdk", 4)) {
-      g_ceph_context->_conf->set_val("ms_type", "async+posix");
+      g_ceph_context->_conf.set_val("ms_type", "async+posix");
       addr = "127.0.0.1:15000";
       port_addr = "127.0.0.1:15001";
     } else {
-      g_ceph_context->_conf->set_val_or_die("ms_type", "async+dpdk");
-      g_ceph_context->_conf->set_val_or_die("ms_dpdk_debug_allow_loopback", "true");
-      g_ceph_context->_conf->set_val_or_die("ms_async_op_threads", "2");
-      g_ceph_context->_conf->set_val_or_die("ms_dpdk_coremask", "0x7");
-      g_ceph_context->_conf->set_val_or_die("ms_dpdk_host_ipv4_addr", "172.16.218.3");
-      g_ceph_context->_conf->set_val_or_die("ms_dpdk_gateway_ipv4_addr", "172.16.218.2");
-      g_ceph_context->_conf->set_val_or_die("ms_dpdk_netmask_ipv4_addr", "255.255.255.0");
+      g_ceph_context->_conf.set_val_or_die("ms_type", "async+dpdk");
+      g_ceph_context->_conf.set_val_or_die("ms_dpdk_debug_allow_loopback", "true");
+      g_ceph_context->_conf.set_val_or_die("ms_async_op_threads", "2");
+      g_ceph_context->_conf.set_val_or_die("ms_dpdk_coremask", "0x7");
+      g_ceph_context->_conf.set_val_or_die("ms_dpdk_host_ipv4_addr", "172.16.218.3");
+      g_ceph_context->_conf.set_val_or_die("ms_dpdk_gateway_ipv4_addr", "172.16.218.2");
+      g_ceph_context->_conf.set_val_or_die("ms_dpdk_netmask_ipv4_addr", "255.255.255.0");
       addr = "172.16.218.3:15000";
       port_addr = "172.16.218.3:15001";
     }
@@ -185,7 +185,7 @@ TEST_P(NetworkWorkerTest, SimpleTest) {
     EventCenter *center = &worker->center;
     ssize_t r = 0;
     if (stack->support_local_listen_table() || worker->id == 0)
-      r = worker->listen(bind_addr, options, &bind_socket);
+      r = worker->listen(bind_addr, 0, options, &bind_socket);
     ASSERT_EQ(0, r);
 
     ConnectedSocket cli_socket, srv_socket;
@@ -287,7 +287,7 @@ TEST_P(NetworkWorkerTest, ConnectFailedTest) {
     ServerSocket bind_socket;
     int r = 0;
     if (stack->support_local_listen_table() || worker->id == 0)
-      r = worker->listen(bind_addr, options, &bind_socket);
+      r = worker->listen(bind_addr, 0, options, &bind_socket);
     ASSERT_EQ(0, r);
 
     ConnectedSocket cli_socket1, cli_socket2;
@@ -328,10 +328,10 @@ TEST_P(NetworkWorkerTest, ListenTest) {
   ASSERT_TRUE(bind_addr.parse(get_addr().c_str()));
   SocketOptions options;
   ServerSocket bind_socket1, bind_socket2;
-  int r = worker->listen(bind_addr, options, &bind_socket1);
+  int r = worker->listen(bind_addr, 0, options, &bind_socket1);
   ASSERT_EQ(0, r);
 
-  r = worker->listen(bind_addr, options, &bind_socket2);
+  r = worker->listen(bind_addr, 0, options, &bind_socket2);
   ASSERT_EQ(-EADDRINUSE, r);
 }
 
@@ -350,7 +350,7 @@ TEST_P(NetworkWorkerTest, AcceptAndCloseTest) {
     {
       ServerSocket bind_socket;
       if (stack->support_local_listen_table() || worker->id == 0)
-        r = worker->listen(bind_addr, options, &bind_socket);
+        r = worker->listen(bind_addr, 0, options, &bind_socket);
       ASSERT_EQ(0, r);
 
       ConnectedSocket srv_socket, cli_socket;
@@ -457,7 +457,7 @@ TEST_P(NetworkWorkerTest, ComplexTest) {
     ServerSocket bind_socket;
     int r = 0;
     if (stack->support_local_listen_table() || worker->id == 0) {
-      r = worker->listen(bind_addr, options, &bind_socket);
+      r = worker->listen(bind_addr, 0, options, &bind_socket);
       ASSERT_EQ(0, r);
       *listen_p = true;
     }
@@ -1010,7 +1010,7 @@ class StressFactory {
     t_data.worker = worker;
     ServerSocket bind_socket;
     if (stack->support_local_listen_table() || worker->id == 0) {
-      r = worker->listen(bind_addr, options, &bind_socket);
+      r = worker->listen(bind_addr, 0, options, &bind_socket);
       ASSERT_EQ(0, r);
       already_bind = true;
     }

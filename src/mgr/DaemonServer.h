@@ -21,15 +21,15 @@
 
 #include "common/Mutex.h"
 #include "common/LogClient.h"
+#include "common/Timer.h"
 
 #include <msg/Messenger.h>
 #include <mon/MonClient.h>
 
-#include "auth/AuthAuthorizeHandler.h"
-
 #include "ServiceMap.h"
 #include "MgrSession.h"
 #include "DaemonState.h"
+#include "OSDPerfMetricCollector.h"
 
 class MMgrReport;
 class MMgrOpen;
@@ -37,6 +37,8 @@ class MMgrClose;
 class MMonMgrReport;
 class MCommand;
 struct MonCommand;
+class CommandContext;
+struct OSDPerfMetricQuery;
 
 
 /**
@@ -62,11 +64,6 @@ protected:
   ClusterState &cluster_state;
   PyModuleRegistry &py_modules;
   LogChannelRef clog, audit_clog;
-
-  // Authentication methods for cluster peers
-  AuthAuthorizeHandlerRegistry auth_cluster_registry;
-  // Authentication methods for clients
-  AuthAuthorizeHandlerRegistry auth_service_registry;
 
   // Connections for daemons, and clients with service names set
   // (i.e. those MgrClients that are allowed to send MMgrReports)
@@ -103,6 +100,28 @@ private:
   std::set<int32_t> reported_osds;
   void maybe_ready(int32_t osd_id);
 
+  SafeTimer timer;
+  bool shutting_down;
+  Context *tick_event;
+  void tick();
+  void schedule_tick_locked(double delay_sec);
+
+  class OSDPerfMetricCollectorListener :
+      public OSDPerfMetricCollector::Listener {
+  public:
+    OSDPerfMetricCollectorListener(DaemonServer *server)
+      : server(server) {
+    }
+    void handle_query_updated() override {
+      server->handle_osd_perf_metric_query_updated();
+    }
+  private:
+    DaemonServer *server;
+  };
+  OSDPerfMetricCollectorListener osd_perf_metric_collector_listener;
+  OSDPerfMetricCollector osd_perf_metric_collector;
+  void handle_osd_perf_metric_query_updated();
+
 public:
   int init(uint64_t gid, entity_addrvec_t client_addrs);
   void shutdown();
@@ -119,34 +138,37 @@ public:
   ~DaemonServer() override;
 
   bool ms_dispatch(Message *m) override;
+  int ms_handle_authentication(Connection *con) override;
   bool ms_handle_reset(Connection *con) override;
   void ms_handle_remote_reset(Connection *con) override {}
   bool ms_handle_refused(Connection *con) override;
-  bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer,
-                         bool force_new) override;
-  bool ms_verify_authorizer(
-    Connection *con,
-    int peer_type,
-    int protocol,
-    ceph::bufferlist& authorizer,
-    ceph::bufferlist& authorizer_reply,
-    bool& isvalid,
-    CryptoKey& session_key,
-    std::unique_ptr<AuthAuthorizerChallenge> *challenge) override;
+  bool ms_get_authorizer(int dest_type, AuthAuthorizer **authorizer) override;
+  KeyStore *ms_get_auth1_authorizer_keystore() override;
 
   bool handle_open(MMgrOpen *m);
   bool handle_close(MMgrClose *m);
   bool handle_report(MMgrReport *m);
   bool handle_command(MCommand *m);
+  bool _handle_command(MCommand *m, std::shared_ptr<CommandContext>& cmdctx);
   void send_report();
   void got_service_map();
   void got_mgr_map();
+  void adjust_pgs();
 
   void _send_configure(ConnectionRef c);
 
+  OSDPerfMetricQueryID add_osd_perf_query(
+      const OSDPerfMetricQuery &query,
+      const std::optional<OSDPerfMetricLimit> &limit);
+  int remove_osd_perf_query(OSDPerfMetricQueryID query_id);
+  int get_osd_perf_counters(OSDPerfMetricQueryID query_id,
+                            std::map<OSDPerfMetricKey, PerformanceCounters> *c);
+
   virtual const char** get_tracked_conf_keys() const override;
-  virtual void handle_conf_change(const md_config_t *conf,
+  virtual void handle_conf_change(const ConfigProxy& conf,
                           const std::set <std::string> &changed) override;
+
+  void schedule_tick(double delay_sec);
 };
 
 #endif

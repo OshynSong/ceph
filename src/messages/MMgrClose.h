@@ -5,10 +5,13 @@
 
 #include "msg/Message.h"
 
-class MMgrClose : public Message
-{
-  static const int HEAD_VERSION = 1;
-  static const int COMPAT_VERSION = 1;
+class MMgrClose : public MessageInstance<MMgrClose> {
+public:
+  friend factory;
+private:
+
+  static constexpr int HEAD_VERSION = 1;
+  static constexpr int COMPAT_VERSION = 1;
 
 public:
   std::string daemon_name;
@@ -27,7 +30,7 @@ public:
     encode(service_name, payload);
   }
 
-  const char *get_type_name() const override { return "mgrclose"; }
+  std::string_view get_type_name() const override { return "mgrclose"; }
   void print(ostream& out) const override {
     out << get_type_name() << "(";
     if (service_name.length()) {
@@ -40,6 +43,6 @@ public:
   }
 
   MMgrClose()
-    : Message(MSG_MGR_CLOSE, HEAD_VERSION, COMPAT_VERSION)
+    : MessageInstance(MSG_MGR_CLOSE, HEAD_VERSION, COMPAT_VERSION)
   {}
 };

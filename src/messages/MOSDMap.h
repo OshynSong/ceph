@@ -20,10 +20,12 @@
 #include "osd/OSDMap.h"
 #include "include/ceph_features.h"
 
-class MOSDMap : public Message {
-
-  static const int HEAD_VERSION = 4;
-  static const int COMPAT_VERSION = 3;
+class MOSDMap : public MessageInstance<MOSDMap> {
+public:
+  friend factory;
+private:
+  static constexpr int HEAD_VERSION = 4;
+  static constexpr int COMPAT_VERSION = 3;
 
  public:
   uuid_d fsid;
@@ -63,9 +65,9 @@ class MOSDMap : public Message {
   }
 
 
-  MOSDMap() : Message(CEPH_MSG_OSD_MAP, HEAD_VERSION, COMPAT_VERSION) { }
+  MOSDMap() : MessageInstance(CEPH_MSG_OSD_MAP, HEAD_VERSION, COMPAT_VERSION) { }
   MOSDMap(const uuid_d &f, const uint64_t features)
-    : Message(CEPH_MSG_OSD_MAP, HEAD_VERSION, COMPAT_VERSION),
+    : MessageInstance(CEPH_MSG_OSD_MAP, HEAD_VERSION, COMPAT_VERSION),
       fsid(f), encode_features(features),
       oldest_map(0), newest_map(0) { }
 private:
@@ -157,7 +159,7 @@ public:
     }
   }
 
-  const char *get_type_name() const override { return "osdmap"; }
+  std::string_view get_type_name() const override { return "osdmap"; }
   void print(ostream& out) const override {
     out << "osd_map(" << get_first() << ".." << get_last();
     if (oldest_map || newest_map)

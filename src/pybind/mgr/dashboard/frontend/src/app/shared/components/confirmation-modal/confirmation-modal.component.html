@@ -1,4 +1,4 @@
-<cd-modal>
+<cd-modal (hide)="cancel()">
   <ng-container class="modal-title">{{ titleText }}</ng-container>
   <ng-container class="modal-content">
     <form name="confirmationForm"
@@ -11,15 +11,14 @@
       </div>
       <div class="modal-footer">
         <div class="button-group text-right">
-          <cd-submit-button i18n
-                            [form]="confirmationForm"
-                            (submitAction)="submit()">
+          <cd-submit-button [form]="confirmationForm"
+                            (submitAction)="onSubmit(confirmationForm.value)">
             {{ buttonText }}
           </cd-submit-button>
           <button i18n
                   type="button"
                   class="btn btn-sm btn-default"
-                  (click)="modalRef.hide()">Cancel</button>
+                  (click)="cancel()">Cancel</button>
         </div>
       </div>
     </form>

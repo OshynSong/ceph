@@ -99,10 +99,10 @@ std::string get_positional_argument(
     const boost::program_options::variables_map &vm, size_t index);
 
 std::string get_default_pool_name();
-std::string get_pool_name(const boost::program_options::variables_map &vm,
-                          size_t *arg_index);
-std::string get_namespace_name(const boost::program_options::variables_map &vm,
-                               size_t *arg_index);
+int get_pool_and_namespace_names(
+    const boost::program_options::variables_map &vm,
+    bool default_empty_pool_name, bool validate_pool_name,
+    std::string* pool_name, std::string* namespace_name, size_t *arg_index);
 
 int get_pool_image_snapshot_names(
     const boost::program_options::variables_map &vm,
@@ -151,10 +151,13 @@ int get_formatter(const boost::program_options::variables_map &vm,
 
 void init_context();
 
+int init_rados(librados::Rados *rados);
+
 int init(const std::string &pool_name, const std::string& namespace_name,
          librados::Rados *rados, librados::IoCtx *io_ctx);
 int init_io_ctx(librados::Rados &rados, const std::string &pool_name,
                 const std::string& namespace_name, librados::IoCtx *io_ctx);
+int set_namespace(const std::string& namespace_name, librados::IoCtx *io_ctx);
 
 void disable_cache();
 

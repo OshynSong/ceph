@@ -5,20 +5,21 @@
 
 #include "os/filestore/WBThrottle.h"
 #include "common/perf_counters.h"
+#include "common/errno.h"
 
 WBThrottle::WBThrottle(CephContext *cct) :
   cur_ios(0), cur_size(0),
   cct(cct),
   logger(NULL),
   stopping(true),
-  lock("WBThrottle::lock", false, true, false, cct),
+  lock("WBThrottle::lock", false, true, false),
   fs(XFS)
 {
   {
     Mutex::Locker l(lock);
     set_from_conf();
   }
-  assert(cct);
+  ceph_assert(cct);
   PerfCountersBuilder b(
     cct, string("WBThrottle"),
     l_wbthrottle_first, l_wbthrottle_last);
@@ -33,14 +34,14 @@ WBThrottle::WBThrottle(CephContext *cct) :
   for (unsigned i = l_wbthrottle_first + 1; i != l_wbthrottle_last; ++i)
     logger->set(i, 0);
 
-  cct->_conf->add_observer(this);
+  cct->_conf.add_observer(this);
 }
 
 WBThrottle::~WBThrottle() {
-  assert(cct);
+  ceph_assert(cct);
   cct->get_perfcounters_collection()->remove(logger);
   delete logger;
-  cct->_conf->remove_observer(this);
+  cct->_conf.remove_observer(this);
 }
 
 void WBThrottle::start()
@@ -85,7 +86,7 @@ const char** WBThrottle::get_tracked_conf_keys() const
 
 void WBThrottle::set_from_conf()
 {
-  assert(lock.is_locked());
+  ceph_assert(lock.is_locked());
   if (fs == BTRFS) {
     size_limits.first =
       cct->_conf->filestore_wbthrottle_btrfs_bytes_start_flusher;
@@ -113,12 +114,12 @@ void WBThrottle::set_from_conf()
     fd_limits.second =
       cct->_conf->filestore_wbthrottle_xfs_inodes_hard_limit;
   } else {
-    assert(0 == "invalid value for fs");
+    ceph_abort_msg("invalid value for fs");
   }
   cond.Signal();
 }
 
-void WBThrottle::handle_conf_change(const md_config_t *conf,
+void WBThrottle::handle_conf_change(const ConfigProxy& conf,
 				    const std::set<std::string> &changed)
 {
   Mutex::Locker l(lock);
@@ -133,13 +134,13 @@ void WBThrottle::handle_conf_change(const md_config_t *conf,
 bool WBThrottle::get_next_should_flush(
   boost::tuple<ghobject_t, FDRef, PendingWB> *next)
 {
-  assert(lock.is_locked());
-  assert(next);
+  ceph_assert(lock.is_locked());
+  ceph_assert(next);
   while (!stopping && (!beyond_limit() || pending_wbs.empty()))
          cond.Wait(lock);
   if (stopping)
     return false;
-  assert(!pending_wbs.empty());
+  ceph_assert(!pending_wbs.empty());
   ghobject_t obj(pop_object());
 
   ceph::unordered_map<ghobject_t, pair<PendingWB, FDRef> >::iterator i =
@@ -166,14 +167,18 @@ void *WBThrottle::entry()
     logger->inc(l_wbthrottle_inodes_wb);
     lock.Unlock();
 #if defined(HAVE_FDATASYNC)
-    ::fdatasync(**wb.get<1>());
+    int r = ::fdatasync(**wb.get<1>());
 #else
-    ::fsync(**wb.get<1>());
+    int r = ::fsync(**wb.get<1>());
 #endif
+    if (r < 0) {
+      lderr(cct) << "WBThrottle fsync failed: " << cpp_strerror(errno) << dendl;
+      ceph_abort();
+    }
 #ifdef HAVE_POSIX_FADVISE
     if (cct->_conf->filestore_fadvise && wb.get<2>().nocache) {
       int fa_r = posix_fadvise(**wb.get<1>(), 0, 0, POSIX_FADV_DONTNEED);
-      assert(fa_r == 0);
+      ceph_assert(fa_r == 0);
     }
 #endif
     lock.Lock();
@@ -223,7 +228,7 @@ void WBThrottle::clear()
 #ifdef HAVE_POSIX_FADVISE
     if (cct->_conf->filestore_fadvise && i->second.first.nocache) {
       int fa_r = posix_fadvise(**i->second.second, 0, 0, POSIX_FADV_DONTNEED);
-      assert(fa_r == 0);
+      ceph_assert(fa_r == 0);
     }
 #endif
 

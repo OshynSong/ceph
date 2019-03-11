@@ -18,10 +18,12 @@
 
 #include "MOSDFastDispatchOp.h"
 
-class MOSDPGUpdateLogMissing : public MOSDFastDispatchOp {
-
-  static const int HEAD_VERSION = 3;
-  static const int COMPAT_VERSION = 1;
+class MOSDPGUpdateLogMissing : public MessageInstance<MOSDPGUpdateLogMissing, MOSDFastDispatchOp> {
+public:
+  friend factory;
+private:
+  static constexpr int HEAD_VERSION = 3;
+  static constexpr int COMPAT_VERSION = 1;
 
 
 public:
@@ -50,7 +52,7 @@ public:
   }
 
   MOSDPGUpdateLogMissing()
-    : MOSDFastDispatchOp(MSG_OSD_PG_UPDATE_LOG_MISSING, HEAD_VERSION,
+    : MessageInstance(MSG_OSD_PG_UPDATE_LOG_MISSING, HEAD_VERSION,
 			 COMPAT_VERSION) { }
   MOSDPGUpdateLogMissing(
     const mempool::osd_pglog::list<pg_log_entry_t> &entries,
@@ -61,7 +63,7 @@ public:
     ceph_tid_t rep_tid,
     eversion_t pg_trim_to,
     eversion_t pg_roll_forward_to)
-    : MOSDFastDispatchOp(MSG_OSD_PG_UPDATE_LOG_MISSING, HEAD_VERSION,
+    : MessageInstance(MSG_OSD_PG_UPDATE_LOG_MISSING, HEAD_VERSION,
 			 COMPAT_VERSION),
       map_epoch(epoch),
       min_epoch(min_epoch),
@@ -77,7 +79,7 @@ private:
   ~MOSDPGUpdateLogMissing() override {}
 
 public:
-  const char *get_type_name() const override { return "PGUpdateLogMissing"; }
+  std::string_view get_type_name() const override { return "PGUpdateLogMissing"; }
   void print(ostream& out) const override {
     out << "pg_update_log_missing(" << pgid << " epoch " << map_epoch
 	<< "/" << min_epoch

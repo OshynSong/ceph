@@ -12,7 +12,7 @@
 #include <atomic>
 
 class CephContext;
-class RGWRados;
+class RGWSI_Zone;
 
 template <class T>
 static int parse_decode_json(CephContext *cct, T& t, bufferlist& bl)
@@ -79,8 +79,8 @@ class RGWRESTConn
 
 public:
 
-  RGWRESTConn(CephContext *_cct, RGWRados *store, const string& _remote_id, const list<string>& endpoints, HostStyle _host_style = PathStyle);
-  RGWRESTConn(CephContext *_cct, RGWRados *store, const string& _remote_id, const list<string>& endpoints, RGWAccessKey _cred, HostStyle _host_style = PathStyle);
+  RGWRESTConn(CephContext *_cct, RGWSI_Zone *zone_svc, const string& _remote_id, const list<string>& endpoints, HostStyle _host_style = PathStyle);
+  RGWRESTConn(CephContext *_cct, RGWSI_Zone *zone_svc, const string& _remote_id, const list<string>& endpoints, RGWAccessKey _cred, HostStyle _host_style = PathStyle);
 
   // custom move needed for atomic
   RGWRESTConn(RGWRESTConn&& other);
@@ -193,11 +193,11 @@ class S3RESTConn : public RGWRESTConn {
 
 public:
 
-  S3RESTConn(CephContext *_cct, RGWRados *store, const string& _remote_id, const list<string>& endpoints, HostStyle _host_style = PathStyle) :
-    RGWRESTConn(_cct, store, _remote_id, endpoints, _host_style) {}
+  S3RESTConn(CephContext *_cct, RGWSI_Zone *svc_zone, const string& _remote_id, const list<string>& endpoints, HostStyle _host_style = PathStyle) :
+    RGWRESTConn(_cct, svc_zone, _remote_id, endpoints, _host_style) {}
 
-  S3RESTConn(CephContext *_cct, RGWRados *store, const string& _remote_id, const list<string>& endpoints, RGWAccessKey _cred, HostStyle _host_style = PathStyle):
-    RGWRESTConn(_cct, store, _remote_id, endpoints, _cred, _host_style) {}
+  S3RESTConn(CephContext *_cct, RGWSI_Zone *svc_zone, const string& _remote_id, const list<string>& endpoints, RGWAccessKey _cred, HostStyle _host_style = PathStyle):
+    RGWRESTConn(_cct, svc_zone, _remote_id, endpoints, _cred, _host_style) {}
   ~S3RESTConn() override = default;
 
   void populate_params(param_vec_t& params, const rgw_user *uid, const string& zonegroup) override {
@@ -411,8 +411,8 @@ public:
     return req.get_io_user_info();
   }
 
-  template <class T>
-  int decode_resource(T *dest);
+  template <class T, class E>
+  int decode_resource(T *dest, E *err_result);
 
   int send(bufferlist& bl);
 
@@ -439,17 +439,25 @@ public:
     return 0;
   }
 
-  template <class T>
-  int wait(T *dest);
+  template <class T, class E = int>
+  int wait(T *dest, E *err_result = nullptr);
 };
 
-template <class T>
-int RGWRESTSendResource::decode_resource(T *dest)
+template <class T, class E>
+int RGWRESTSendResource::decode_resource(T *dest, E *err_result)
 {
   int ret = req.get_status();
   if (ret < 0) {
+    if (err_result) {
+      parse_decode_json(cct, *err_result, bl);
+    }
     return ret;
   }
+
+  if (!dest) {
+    return 0;
+  }
+
   ret = parse_decode_json(cct, *dest, bl);
   if (ret < 0) {
     return ret;
@@ -457,15 +465,18 @@ int RGWRESTSendResource::decode_resource(T *dest)
   return 0;
 }
 
-template <class T>
-int RGWRESTSendResource::wait(T *dest)
+template <class T, class E>
+int RGWRESTSendResource::wait(T *dest, E *err_result)
 {
   int ret = req.wait();
   if (ret < 0) {
+    if (err_result) {
+      parse_decode_json(cct, *err_result, bl);
+    }
     return ret;
   }
 
-  ret = decode_resource(dest);
+  ret = decode_resource(dest, err_result);
   if (ret < 0) {
     return ret;
   }

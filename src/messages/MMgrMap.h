@@ -19,7 +19,10 @@
 #include "msg/Message.h"
 #include "mon/MgrMap.h"
 
-class MMgrMap : public Message {
+class MMgrMap : public MessageInstance<MMgrMap> {
+public:
+  friend factory;
+
 protected:
   MgrMap map;
 
@@ -27,9 +30,9 @@ public:
   const MgrMap & get_map() {return map;}
 
   MMgrMap() : 
-    Message(MSG_MGR_MAP) {}
+    MessageInstance(MSG_MGR_MAP) {}
   MMgrMap(const MgrMap &map_) :
-    Message(MSG_MGR_MAP), map(map_)
+    MessageInstance(MSG_MGR_MAP), map(map_)
   {
   }
 
@@ -37,7 +40,7 @@ private:
   ~MMgrMap() override {}
 
 public:
-  const char *get_type_name() const override { return "mgrmap"; }
+  std::string_view get_type_name() const override { return "mgrmap"; }
   void print(ostream& out) const override {
     out << get_type_name() << "(e " << map.epoch << ")";
   }

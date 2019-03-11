@@ -14,28 +14,39 @@
 
 #pragma once
 
-#include <boost/intrusive_ptr.hpp>
+#include <seastar/core/shared_ptr.hh>
+#include <seastar/core/sharded.hh>
 
-#include "Errors.h"
 #include "msg/msg_types.h"
 #include "msg/Message.h"
 
 using peer_type_t = int;
 using auth_proto_t = int;
 
-class Message;
-using MessageRef = boost::intrusive_ptr<Message>;
-
 namespace ceph::net {
 
 using msgr_tag_t = uint8_t;
 
 class Connection;
-using ConnectionRef = boost::intrusive_ptr<Connection>;
+using ConnectionRef = seastar::shared_ptr<Connection>;
+// NOTE: ConnectionXRef should only be used in seastar world, because
+// lw_shared_ptr<> is not safe to be accessed by unpinned alien threads.
+using ConnectionXRef = seastar::lw_shared_ptr<seastar::foreign_ptr<ConnectionRef>>;
 
 class Dispatcher;
 
 class Messenger;
 
-} // namespace ceph::net
+template <typename T, typename... Args>
+seastar::future<T*> create_sharded(Args... args) {
+  auto sharded_obj = seastar::make_lw_shared<seastar::sharded<T>>();
+  return sharded_obj->start(args...).then([sharded_obj]() {
+      auto ret = &sharded_obj->local();
+      seastar::engine().at_exit([sharded_obj]() {
+          return sharded_obj->stop().finally([sharded_obj] {});
+        });
+      return ret;
+    });
+}
 
+} // namespace ceph::net

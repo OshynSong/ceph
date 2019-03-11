@@ -20,17 +20,19 @@
 #include "include/types.h"
 
 
-class MMDSResolveAck : public Message {
- public:
+class MMDSResolveAck : public MessageInstance<MMDSResolveAck> {
+public:
+  friend factory;
+
   map<metareqid_t, bufferlist> commit;
   vector<metareqid_t> abort;
 
-  MMDSResolveAck() : Message(MSG_MDS_RESOLVEACK) {}
-private:
+protected:
+  MMDSResolveAck() : MessageInstance(MSG_MDS_RESOLVEACK) {}
   ~MMDSResolveAck() override {}
 
 public:
-  const char *get_type_name() const override { return "resolve_ack"; }
+  std::string_view get_type_name() const override { return "resolve_ack"; }
   /*void print(ostream& out) const {
     out << "resolve_ack.size()
 	<< "+" << ambiguous_imap.size()

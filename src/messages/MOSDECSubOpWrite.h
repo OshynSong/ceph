@@ -18,9 +18,12 @@
 #include "MOSDFastDispatchOp.h"
 #include "osd/ECMsgTypes.h"
 
-class MOSDECSubOpWrite : public MOSDFastDispatchOp {
-  static const int HEAD_VERSION = 2;
-  static const int COMPAT_VERSION = 1;
+class MOSDECSubOpWrite : public MessageInstance<MOSDECSubOpWrite, MOSDFastDispatchOp> {
+public:
+  friend factory;
+private:
+  static constexpr int HEAD_VERSION = 2;
+  static constexpr int COMPAT_VERSION = 1;
 
 public:
   spg_t pgid;
@@ -41,10 +44,10 @@ public:
   }
 
   MOSDECSubOpWrite()
-    : MOSDFastDispatchOp(MSG_OSD_EC_WRITE, HEAD_VERSION, COMPAT_VERSION)
+    : MessageInstance(MSG_OSD_EC_WRITE, HEAD_VERSION, COMPAT_VERSION)
     {}
   MOSDECSubOpWrite(ECSubWrite &in_op)
-    : MOSDFastDispatchOp(MSG_OSD_EC_WRITE, HEAD_VERSION, COMPAT_VERSION) {
+    : MessageInstance(MSG_OSD_EC_WRITE, HEAD_VERSION, COMPAT_VERSION) {
     op.claim(in_op);
   }
 
@@ -70,7 +73,7 @@ public:
     encode_trace(payload, features);
   }
 
-  const char *get_type_name() const override { return "MOSDECSubOpWrite"; }
+  std::string_view get_type_name() const override { return "MOSDECSubOpWrite"; }
 
   void print(ostream& out) const override {
     out << "MOSDECSubOpWrite(" << pgid

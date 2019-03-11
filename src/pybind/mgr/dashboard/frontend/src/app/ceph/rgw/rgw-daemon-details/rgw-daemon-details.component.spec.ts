@@ -3,10 +3,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { TabsModule } from 'ngx-bootstrap/tabs';
 
-import { RgwDaemonService } from '../../../shared/api/rgw-daemon.service';
+import { configureTestBed } from '../../../../testing/unit-test-helper';
 import { CdTableSelection } from '../../../shared/models/cd-table-selection';
 import { SharedModule } from '../../../shared/shared.module';
-import { configureTestBed } from '../../../shared/unit-test-helper';
 import { PerformanceCounterModule } from '../../performance-counter/performance-counter.module';
 import { RgwDaemonDetailsComponent } from './rgw-daemon-details.component';
 
@@ -16,13 +15,7 @@ describe('RgwDaemonDetailsComponent', () => {
 
   configureTestBed({
     declarations: [RgwDaemonDetailsComponent],
-    imports: [
-      SharedModule,
-      PerformanceCounterModule,
-      TabsModule.forRoot(),
-      HttpClientTestingModule
-    ],
-    providers: [RgwDaemonService]
+    imports: [SharedModule, PerformanceCounterModule, TabsModule.forRoot(), HttpClientTestingModule]
   });
 
   beforeEach(() => {

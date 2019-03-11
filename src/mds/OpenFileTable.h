@@ -18,10 +18,11 @@
 #include "mdstypes.h"
 #include "Anchor.h"
 
+#include "MDSContext.h"
+
 class CDir;
 class CInode;
 class MDSRank;
-class MDSInternalContextBase;
 
 class OpenFileTable
 {
@@ -36,15 +37,15 @@ public:
   void notify_unlink(CInode *in);
   bool is_any_dirty() const { return !dirty_items.empty(); }
 
-  void commit(MDSInternalContextBase *c, uint64_t log_seq, int op_prio);
+  void commit(MDSContext *c, uint64_t log_seq, int op_prio);
   uint64_t get_committed_log_seq() const { return committed_log_seq; }
   uint64_t get_committing_log_seq() const { return committing_log_seq; }
   bool is_any_committing() const { return num_pending_commit > 0; }
 
-  void load(MDSInternalContextBase *c);
+  void load(MDSContext *c);
   bool is_loaded() const { return load_done; }
-  void wait_for_load(MDSInternalContextBase *c) {
-    assert(!load_done);
+  void wait_for_load(MDSContext *c) {
+    ceph_assert(!load_done);
     waiting_for_load.push_back(c);
   }
 
@@ -53,8 +54,8 @@ public:
 
   bool prefetch_inodes();
   bool is_prefetched() const { return prefetch_state == DONE; }
-  void wait_for_prefetch(MDSInternalContextBase *c) {
-    assert(!is_prefetched());
+  void wait_for_prefetch(MDSContext *c) {
+    ceph_assert(!is_prefetched());
     waiting_for_prefetch.push_back(c);
   }
 
@@ -97,14 +98,14 @@ protected:
 
   unsigned num_pending_commit = 0;
   void _encode_header(bufferlist& bl, int j_state);
-  void _commit_finish(int r, uint64_t log_seq, MDSInternalContextBase *fin);
-  void _journal_finish(int r, uint64_t log_seq, MDSInternalContextBase *fin,
+  void _commit_finish(int r, uint64_t log_seq, MDSContext *fin);
+  void _journal_finish(int r, uint64_t log_seq, MDSContext *fin,
 		       std::map<unsigned, std::vector<ObjectOperation> >& ops);
 
   std::vector<std::map<std::string, bufferlist> > loaded_journals;
   map<inodeno_t, RecoveredAnchor> loaded_anchor_map;
   set<dirfrag_t> loaded_dirfrags;
-  list<MDSInternalContextBase*> waiting_for_load;
+  MDSContext::vec waiting_for_load;
   bool load_done = false;
 
   void _reset_states() {
@@ -129,7 +130,7 @@ protected:
   };
   unsigned prefetch_state = 0;
   unsigned num_opening_inodes = 0;
-  list<MDSInternalContextBase*> waiting_for_prefetch;
+  MDSContext::vec waiting_for_prefetch;
   void _open_ino_finish(inodeno_t ino, int r);
   void _prefetch_inodes();
   void _prefetch_dirfrags();
